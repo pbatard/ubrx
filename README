@@ -1,0 +1,206 @@
+*******************************************************************************
+*                                  UBRX README                                *
+*******************************************************************************
+
+UBRX is a Universal Bootblock Recovery serial console utility, targeted at x86
+platform BIOSes, such as the one found on most AMD or Intel based PCs.
+
+It aims at providing a universal way of performing system recovery operations
+such as flashing a BIOS or running a low level debugger, for x86 systems,
+through the provision of a serial console. This mode of operation is also
+sometimes called "panic room" mode.
+
+The main goal of UBRX is to provide a base that is fully hardware agnostic,
+meaning for instance that the exact same UBRX binary will be able to provide a
+recovery console regardless of the CPU or chipset being used. In effect, this
+means that you should be able to pick a BIOS from one machine where UBRX has
+already been installed, put it in another PC, and reflash the BIOS payload
+directly on the target through the recovery console, even if the CPUs, chipsets
+and Super I/O of the 2 computers are entirely different.
+In short, an UBRX bootblock should work exactly the same, without needing
+reinstallation, regardless of the hardware you have.
+
+The advantage we see in such a feature is that it could help with coreboot
+development for platforms that are not yet supported by the project, through the
+provision of a recovery/development console that is expected to work on any
+recent system, and where a development BIOS can easily be tested.
+The other advantage has of course to do with in-situ BIOS recovery for systems
+using a BIOS that includes UBRX.
+
+
+Current Status
+--------------
+
+UBRX is currently a *PROOF OF CONCEPT*.
+
+The current aim is to demonstrate that creating a generic x86 'panic mode'
+bootblock is achievable, by demoing "universal" panic-room entry detection and
+serial console.
+
+At this stage, to actually be useful, UBRX is missing critical parts such as CAR
+(Cache As RAM) initialization as well as Y-modem transfer for execution of bare
+metal executables.
+
+However, our implementation leads us to believe that implementing a generic UART
+detection as well as a recovery console can easily be achieved in a 8 KB
+bootblock. The current SuperIO/UART detection part takes around 1.5 KB (which
+can be optimized further) and even with anticipated future requirements
+improvements, we have reasons to believe that, in a 8 KB bootblock, at least 6
+KB should remain available for a generic CAR + Y-Modem functions implementation,
+which ought to be enough.
+
+
+Limitations
+-----------
+
+Because of the diversity and history of the x86 PC platform, it should be fairly
+obvious that providing truly universal serial recovery console is a challenge
+that is unlikely to fit in the very limited bootblock area of a BIOS, therefore,
+the following restrictions are currently in effect:
+
+* Only AMD and Intel x86 CPUs are supported
+* The CPU must support the MMX instruction set (Intel Pentium MMX or
+  later, AMD K6 or later). This is because we use MMX as a limited stack.
+* Only Super I/O chipsets conforming to the ISA PnP specifications, and
+  starting in PnP mode on reset are supported (except VMware compatible ones)
+* Some non widespread Super I/O chips with complex config mode (eg. IT8671)
+  have voluntarily been dropped, to keep detection simple
+* Powering up of Super I/O Logical Devices (PnP register 22) is not conducted as
+  we assert that UARTs are powered up by default. If we have evidence that this
+  is not the case, we may add unit power up functionality to UBRX
+* With regards to Super I/O chips that require extra configuration from the
+  Southbridge (for LPC bus access), currently only the Intel ICH chipset
+  initialization mode is supported
+
+Apart from the last one, if you have a PC that was manufactured after 2000,
+the limitations above are unlikely to be much of an impact. The last limitation
+is mostly the result of our lack of AMD systems to test with.
+Each of the limitations above can be addressed in a non POC version of UBRX if
+needed.
+
+
+Build Instructions
+------------------
+
+To build UBRX you need a GNU C compiler toolchain that can produce x86 code:
+ * On x86 Linux, the standard toolchain should do. Cross compilation should
+   also work for non x86 architectures
+ * On Windows, either of cygwin, MinGW32 or MinGW-w64 will do
+ * On OSX, XCode cannot be used so you need to install a proper GNU toolchain
+
+To compile, simply invoke:
+
+ make
+
+The above will build a 512 KB BIOS ROM that only contains the UBRX bootblock.
+To build a BIOS ROM of a different size, you can either invoke 'make' with one
+of the 128k, 256k, 512k, 1m or 2m options, or you can define a ROM_SIZE
+environment variable to one of these parameters.
+The generated file is called 'bios.rom', and you can flash it directly onto a
+BIOS chip.
+
+The size of a bootblock, which currently defaults to 4K, can also be set
+through a BB_SIZE environment variable or by editing the Makefile directly.
+
+Please consult the Makefile to find out how you can also invoke the building
+and flashing of target specific UBRX BIOS ROMs.
+
+Build options, that can be modified, are documented at the top of the bios.S
+source.
+
+
+Testing
+-------
+
+Once UBRX has been flashed onto your BIOS chip, you should connect one of its
+serial port to another computer with a Null Modem cable, open a console on this
+second machine (115200, 8N1, no hardware handshaking) and power up the first
+machine while pressing the Space Bar in the console. You should end up with an
+ubrx> prompt and a serial repeater.
+
+Since UBRX can easily be tested on VMware, we encourage first running a test
+there, before trying on real hardware. For more information on VMware testing
+you can check http://pete.akeo.ie/2011/06/crafting-bios-from-scratch.html
+
+
+Detection primer
+----------------
+
+The paragraphs below highlight the generic Super I/O and 16550 UART detection
+process as performed by UBRX. We believe that this process is both safe and can
+be executed at every boot irrespective of the hardware, without side effects.
+
+The 2 main components UBRX needs to detect are:
+1. a potential PnP Super I/O candidate
+2. a potential 16650 UART Logical Device (LD) on the Super I/O chip
+
+As we start with absolutely no knowledge of the hardware, and must avoid writing
+data at random, since doing so can damage the hardware, our detection process
+is designed with safety in mind from the ground up.
+Below is a description of how we made sure that our probing is as innocuous as
+possible to the wide range of hardware we have to support.
+
+1. The Super I/O chip is accessed through the LPC bus, which is not always
+   accessible after reset, so we may have to enable LPC/SuperIO access first.
+   Currently we are only aware of the later Intel ICH# chipsets, ICH6 and
+   later, requiring this kind of initialization (but we have yet to thoroughly
+   investigate AMD, for lack of relevant hardware to test with).
+   The detection an initialisation of the ICH# chipset for LPC access is safe,
+   as it is PCI based, and the PCI VID:PID of the Intel ICH Hub Interface is
+   well know and can be checked to unconditionaly identify an ICH chip before we
+   proceed with LPC initiation.
+   Moreover, all ICH chips that requires LPC initialization uses the exact same
+   configuration registers (same address, same functions, same bit positions),
+   so only one common pattern of initialization is required, which can also be
+   applied to ICH chips that don't do not require LPC init, since the datasheets
+   show these do not have any conflicting registers at the same address
+   (therefore we can simply let the PCI transaction fail for those). As such our
+   LPC bus access initialization is deemed SAFE.
+
+2. With LPC bus accessible, we must probe a few common Super I/O ports.
+   Currently, these are 0x2E, 0x4E, 0x370, 0x3f0, as well as their +1 data port.
+   The last two I/O ports are commonly assigned to Tape and FDC so we expect any
+   chip there to withstand unintended writes. But even then, the extra care we
+   apply to the 0x2E and 0x4E ports will apply. With regards to the latter,
+   these are more problematic as a non PnP Super I/Os are expected to reside
+   there, and unchecked write access (such as trying to configure PnP access on
+   a non PnP aware chip) may have unintended consequences. To alleviate this
+   problem we:
+   a) always keep a copy of the original value at base address
+   b) perform PnP enter conf (write to base only) and attempt to read the Super
+      I/O ID (at base +1). If the id is either 0x00 of 0xff, we consider that
+      the address is not one of a PnP Super I/O chip and restore the base data
+      => only the base register will have been accessed, then restored.
+   c) always keep a copy of the original value at base+1
+   d) attempt to write LDN values, read them back and check that at least 2 of
+      them stick, indicating that the potential PnP Super I/O chip has at least
+      2 LDs. If this isn't the case, we also restore the content from base+1 and
+      declare the PnP access to have failed.
+   Considering that superiotool and sensors-detect have been performing this
+   kind of Super I/O probing (without the extra restore step) without users
+   reporting problems, and that any recent PC from our targeted audience, would
+   have a PnP Super I/O, we consider this approach SAFE.
+
+3. Even with a possible PnP Super I/O chip accessible (and with the current POC
+   assertion that the UART LD we want to access is powered up by default on
+   reset), we do not have any knowledge of the LDN of the potential UART. With
+   other LDNs being set up for GPIO or hardware monitoring or control, trying
+   to access each LDN as an UART, without exerting any form of caution, is not
+   a viable option. To alleviate this issue, we perform an extensive yet non
+   intrusive detection of a 16550 UART LD by first making sure, through read-
+   only accesses, that the registers match the reset value of a 16550 compliant
+   unit. Then, we try to flip the furthest 'safe' bit in the I/O range
+   (register 7, bit 6, with backup), to eliminate any LD that has less than 7
+   registers. Then we check a singificant unflippable bit from the 16550
+   register range (which we also restore in case of failure), and finish our
+   testing with a complete UART loopback test. In all, we perform no less than
+   16 tests to confirm that an LD is indeed a 16550 UART, with more than 30
+   bits being tested in read-only mode, before we even start trying to flip a
+   single bit. As such, we seem this form of detection both SAFE and conclusive.
+   At the moment, we test up to 32 LDNs per potential PnP Super I/O for UART
+   access. The 16550 tests are heavily documented in bios.S/check_16550.
+
+Only once we have succesfully identified a 16650 UART do we attempt to read the
+panic request key. If multiple UARTs have been identified, they will be checked
+in sequence, meaning that any serial connection available should be available
+to be used for recovery console.
