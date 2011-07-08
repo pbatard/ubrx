@@ -142,7 +142,7 @@ possible to the wide range of hardware we have to support.
 
 1. The Super I/O chip is accessed through the LPC bus, which is not always
    accessible after reset, so we may have to enable LPC/SuperIO access first.
-   Currently we only support Intel ICH# (all versions) and AMD SB7x0/8x0/9x0.
+   Currently we only support Intel ICH# (all versions) and AMD SB6x0-9x0.
    The detection and initialisation of the ICH# chipset for LPC access is safe,
    as it is PCI based, and the PCI VID:PID of the South Bridge is well know and
    can be read to unconditionaly identify an supported chip before we proceed

@@ -44,7 +44,7 @@
 /********************************************************************************/
 /* Build variables:                                                             */
 /********************************************************************************/
-COM_BASE         = 0x3F8
+COM_BASE         = 0x3F8	# See further donw for valid I/O values
 PANIC_KEY        = ' '  # Key to press to enter panic mode (default: <SPACE>)
 PANIC_COUNT      = 5    # Number of times the key must be read to access panic mode
 VMWARE_SUPPORT   = 1	# Include support for VMware platform. 
@@ -96,6 +96,46 @@ COM_SCR          = 0x07	# Scratch register
 # PCI
 PCI_ADDR         = 0xCF8
 PCI_DATA         = 0xCFC
+# According to the serial base, we need to set the I/O Range configuration differently
+# See the various datasheets for reference
+.if COM_BASE == 0x3F8
+	AMD_SB_IO = 0x00000040
+	INTEL_SB_IO = 0x30010010	# 0x3001 as MSW enables 0x2E & 0x4E + COMA I/O ranges
+	# VM_SB_IO is not needed here
+.elseif COM_BASE == 0x2F8
+	AMD_SB_IO = 0x00000080
+	INTEL_SB_IO = 0x30010001
+	VM_SB_IO = 0x04
+.elseif COM_BASE == 0x220
+	AMD_SB_IO = 0x00000100
+	INTEL_SB_IO = 0x30010002
+	VM_SB_IO = 0xc8
+.elseif COM_BASE == 0x228
+	AMD_SB_IO = 0x00000200
+	INTEL_SB_IO = 0x30010003
+	VM_SB_IO = 0xcc
+.elseif COM_BASE == 0x238
+	AMD_SB_IO = 0x00000400
+	INTEL_SB_IO = 0x30010004
+	VM_SB_IO = 0x4c
+.elseif COM_BASE == 0x2E8
+	AMD_SB_IO = 0x00000800
+	INTEL_SB_IO = 0x30010005
+	VM_SB_IO = 0x0c
+.elseif COM_BASE == 0x338
+	AMD_SB_IO = 0x00001000
+	INTEL_SB_IO = 0x30010006
+	VM_SB_IO = 0x48
+.elseif COM_BASE == 0x3E8
+	AMD_SB_IO = 0x00002000
+	INTEL_SB_IO = 0x30010007
+	VM_SB_IO = 0x08
+.else
+  .print "Invalid COM_BASE"
+  .abort
+.endif
+
+
 /********************************************************************************/
 
 
@@ -153,7 +193,9 @@ PCI_DATA         = 0xCFC
 .macro PCI_CONF_OUT32 bus, device, function, address, data
 	PCI_CONF_ADDROUT \bus, \device, \function, \address
 	mov dx, PCI_DATA
+  .ifnes "\value", "eax"
 	mov eax, \data
+  .endif
 	out dx, eax
 .endm
 
@@ -197,7 +239,7 @@ PCI_DATA         = 0xCFC
 /* main:                                                                        */
 /* This section will be relocated according to the bios.ld script.              */
 /********************************************************************************/
-# TODO: PnP register 22 controls power on: 0xFF?
+# TODO (if reports of inactive UART LDs): PnP register 22 & power on function
 
 .section main, "ax"
 .globl init			# init must be declared global for the linker
@@ -411,31 +453,12 @@ exit_pnp_conf:
 	out  dx, al
 	# That's all that's actually needed when using 0x3F8 as base
 	# (previous probing of 0x2E for PnP Super I/O doesn't interfere)
-.if COM_BASE != 0x3F8		# For non default serial base, more init is required
+.if COM_BASE != 0x3F8		# No need for extra init for default serial base
 	dec  dx
 	mov  al, PC97338_FAR
 	out  dx, al
 	inc  dx
-  .if COM_BASE == 0x2F8		# See specs
-	mov  al, 0x04
-  .elseif COM_BASE == 0x3E8
-	mov  al, 0x08
-  .elseif COM_BASE == 0x2E8
-	mov  al, 0x0c
-  .elseif COM_BASE == 0x338
-	mov  al, 0x48
-  .elseif COM_BASE == 0x238
-	mov  al, 0x4c
-  .elseif COM_BASE == 0x2E0
-	mov  al, 0x8c
-  .elseif COM_BASE == 0x220
-	mov  al, 0xc8
-  .elseif COM_BASE == 0x228
-	mov  al, 0xcc
-  .else
-  .print "cannot use the COM_BASE specified for VMware"
-  .abort
-  .endif
+	mov  al, VM_SB_IO
 	out  dx, al
 .endif
 	shl  ebx, 0x10		# next call modifies BX (but not MSW of EBX)
@@ -486,28 +509,29 @@ halt:
 /********************************************************************************/
 
 # MODIFIES EAX, DX
-# Init LPC access for chipset that require it (ICH6 and later, SB7x0/SB8x0/SB9x0)
+# Init LPC access for chipset that require it (Intel ICH#, AMD SB6x0-SB9x0)
 # IN: none
 # OUT: none
 lpc_init:
-	# PCI Configuration space is 32 bit aligned
-	PCI_CONF_IN32 0, 0x1e, 0, 0x00	# ICH DMI to PCI bridge
+	# Operate on 32 bit as PCI Configuration space is 32 bit aligned
+	PCI_CONF_IN32 0, 0x1e, 0, 0x00	# ICH DMI to PCI bridge (bus 0, device 30, function 0)
 	cmp  eax, 0x244e8086		# Intel ICH# (desktop)
 	je   lpc_intel
 	cmp  eax, 0x24488086		# Intel ICH-M# (mobile)
 	je   lpc_intel
-	PCI_CONF_IN32 0, 0x1e, 3, 0x00	# AMD SBxx0
-	cmp  eax, 0x439d1002		# AMD SB LPC ISA Bridge
+	PCI_CONF_IN32 0, 0x14, 3, 0x00	# AMD SBxx0 SouthBridge (bus 0, device 20, function 3)
+	cmp  eax, 0x439d1002		# SB7x0, SB9x0(?)
+	je   lpc_amd
+	cmp  eax, 0x438d1002		# SB6x0, SB8x0
 	je   lpc_amd
 	jmp  sp
 lpc_amd:
-	# TODO: AMD init
-	# • Write LPC_enable bit in function 0, register 64, bit 20.
-	# • Enable LPC address decode ranges.
+	PCI_CONF_OUT32 0, 0x14, 3, 0x44, AMD_SB_IO
+	PCI_CONF_OUT32 0, 0x14, 3, 0x48, 0x0000ff03	# 0x2E/0x4E forwarding, everything else disabled
 	jmp sp
 lpc_intel:
-	# TODO: init according to COM_BASE
-	PCI_CONF_OUT32 0, 0x1f, 0, 0x80, 0x30030010	# COMA@0x3F8, COMB@0x2F8, 0x2E, 0x4E
+	# LPC is device 31, function 0
+	PCI_CONF_OUT32 0, 0x1f, 0, 0x80, INTEL_SB_IO
 	jmp  sp
 
 # MODIFIES: DX, AX, EDI
