@@ -58,25 +58,23 @@ obvious that providing truly universal serial recovery console is a challenge
 that is unlikely to fit in the very limited bootblock area of a BIOS, therefore,
 the following restrictions are currently in effect:
 
-* Only AMD and Intel x86 CPUs are supported
+* console over USB-RS232 adapters is not supported.
+* Only AMD and Intel x86 CPUs are supported.
 * The CPU must support the MMX instruction set (Intel Pentium MMX or
   later, AMD K6 or later). This is because we use MMX as a limited stack.
 * Only Super I/O chipsets conforming to the ISA PnP specifications, and
-  starting in PnP mode on reset are supported (except VMware compatible ones)
+  starting in PnP mode on reset are supported (except if VMware compatible)
 * Some non widespread Super I/O chips with complex config mode (eg. IT8671)
-  have voluntarily been dropped, to keep detection simple
+  have voluntarily been dropped.
 * Powering up of Super I/O Logical Devices (PnP register 22) is not conducted as
-  we assert that UARTs are powered up by default. If we have evidence that this
-  is not the case, we may add unit power up functionality to UBRX
+  we currently assert that UARTs are powered up by default.
 * With regards to Super I/O chips that require extra configuration from the
-  Southbridge (for LPC bus access), currently only the Intel ICH chipset
-  initialization mode is supported
+  Southbridge (for LPC bus access), currently only the Intel ICH (all versions
+  that require it) and AMD SB7x0/SB8x0/SB9x0 initialization modes are supported.
 
-Apart from the last one, if you have a PC that was manufactured after 2000,
-the limitations above are unlikely to be much of an impact. The last limitation
-is mostly the result of our lack of AMD systems to test with.
-Each of the limitations above can be addressed in a non POC version of UBRX if
-needed.
+The limitations above are unlikely to be much of an impact, unless you have a
+very old system. Each of these limitations can be addressed in a non POC version
+of UBRX if needed.
 
 
 Build Instructions
@@ -90,23 +88,25 @@ To build UBRX you need a GNU C compiler toolchain that can produce x86 code:
 
 To compile, simply invoke:
 
- make
+  make
 
 The above will build a 512 KB BIOS ROM that only contains the UBRX bootblock.
 To build a BIOS ROM of a different size, you can either invoke 'make' with one
 of the 128k, 256k, 512k, 1m or 2m options, or you can define a ROM_SIZE
 environment variable to one of these parameters.
-The generated file is called 'bios.rom', and you can flash it directly onto a
-BIOS chip.
+The generated file is called 'bios.rom', which you can then flash directly
+onto a BIOS chip. In case this needs to be pointed out, remember that this
+BIOS does not provide anything, so you MUST ensure that have means to 
+restore your BIOS, with an external programmer, before flashing it.
 
-The size of a bootblock, which currently defaults to 4K, can also be set
+The size of a bootblock, which currently defaults to 8K, can also be set
 through a BB_SIZE environment variable or by editing the Makefile directly.
 
 Please consult the Makefile to find out how you can also invoke the building
 and flashing of target specific UBRX BIOS ROMs.
 
-Build options, that can be modified, are documented at the top of the bios.S
-source.
+Build options, that can be modified, are also documented at the top of the 
+bios.S source.
 
 
 Testing
@@ -142,44 +142,42 @@ possible to the wide range of hardware we have to support.
 
 1. The Super I/O chip is accessed through the LPC bus, which is not always
    accessible after reset, so we may have to enable LPC/SuperIO access first.
-   Currently we are only aware of the later Intel ICH# chipsets, ICH6 and
-   later, requiring this kind of initialization (but we have yet to thoroughly
-   investigate AMD, for lack of relevant hardware to test with).
-   The detection an initialisation of the ICH# chipset for LPC access is safe,
-   as it is PCI based, and the PCI VID:PID of the Intel ICH Hub Interface is
-   well know and can be checked to unconditionaly identify an ICH chip before we
-   proceed with LPC initiation.
-   Moreover, all ICH chips that requires LPC initialization uses the exact same
-   configuration registers (same address, same functions, same bit positions),
-   so only one common pattern of initialization is required, which can also be
-   applied to ICH chips that don't do not require LPC init, since the datasheets
-   show these do not have any conflicting registers at the same address
-   (therefore we can simply let the PCI transaction fail for those). As such our
-   LPC bus access initialization is deemed SAFE.
+   Currently we only support Intel ICH# (all versions) and AMD SB7x0/8x0/9x0.
+   The detection and initialisation of the ICH# chipset for LPC access is safe,
+   as it is PCI based, and the PCI VID:PID of the South Bridge is well know and
+   can be read to unconditionaly identify an supported chip before we proceed
+   with LPC initiation.
+   You will notice that we use a blanket LPC initialization, but this is only 
+   the result of a *thorough* review of all the Intel ICH# and AMD SBxx0 
+   datasheets to confirm that LPC init could indeed be factorized, even for the
+   chips (ICH5 or earlier) that don't require it (no configuration registers 
+   exist for those, so we can simply let the PCI transaction fail).
+   As such our LPC bus access initialization is deemed safe.
 
 2. With LPC bus accessible, we must probe a few common Super I/O ports.
    Currently, these are 0x2E, 0x4E, 0x370, 0x3f0, as well as their +1 data port.
    The last two I/O ports are commonly assigned to Tape and FDC so we expect any
-   chip there to withstand unintended writes. But even then, the extra care we
-   apply to the 0x2E and 0x4E ports will apply. With regards to the latter,
+   chip there to withstand unintended writes. But even then, the extra checks we
+   apply to the 0x2E and 0x4E ports will apply. With regards to 0x2E and 0x4E,
    these are more problematic as a non PnP Super I/Os are expected to reside
    there, and unchecked write access (such as trying to configure PnP access on
    a non PnP aware chip) may have unintended consequences. To alleviate this
    problem we:
-   a) always keep a copy of the original value at base address
+   a) always keep a copy of the original value at base and base+1
    b) perform PnP enter conf (write to base only) and attempt to read the Super
       I/O ID (at base +1). If the id is either 0x00 of 0xff, we consider that
       the address is not one of a PnP Super I/O chip and restore the base data
       => only the base register will have been accessed, then restored.
-   c) always keep a copy of the original value at base+1
-   d) attempt to write LDN values, read them back and check that at least 2 of
+   c) attempt to write 8 LDN values, read them back and check that at least 2 of
       them stick, indicating that the potential PnP Super I/O chip has at least
       2 LDs. If this isn't the case, we also restore the content from base+1 and
-      declare the PnP access to have failed.
-   Considering that superiotool and sensors-detect have been performing this
-   kind of Super I/O probing (without the extra restore step) without users
-   reporting problems, and that any recent PC from our targeted audience, would
-   have a PnP Super I/O, we consider this approach SAFE.
+      declare the PnP access to have failed. At most, this modifies the 3 lowest
+      bits of base +1.
+   Considering that both superiotool and sensors-detect have let user perform
+   similar Super I/O probing (without the extra restore step), and we are not
+   aware of problems, as well as the fact that any recent PC from our targeted
+   audience would have a Super I/O running in PnP mode at either 0x2e or 0x4e,
+   we consider this approach safe to be executed at every boot.
 
 3. Even with a possible PnP Super I/O chip accessible (and with the current POC
    assertion that the UART LD we want to access is powered up by default on
@@ -196,11 +194,11 @@ possible to the wide range of hardware we have to support.
    testing with a complete UART loopback test. In all, we perform no less than
    16 tests to confirm that an LD is indeed a 16550 UART, with more than 30
    bits being tested in read-only mode, before we even start trying to flip a
-   single bit. As such, we seem this form of detection both SAFE and conclusive.
+   single bit. As such, we seem this form of detection both safe and conclusive.
    At the moment, we test up to 32 LDNs per potential PnP Super I/O for UART
    access. The 16550 tests are heavily documented in bios.S/check_16550.
 
 Only once we have succesfully identified a 16650 UART do we attempt to read the
 panic request key. If multiple UARTs have been identified, they will be checked
-in sequence, meaning that any serial connection available should be available
-to be used for recovery console.
+in sequence, meaning that any serial port available on the motherboard can be
+used for console access.
