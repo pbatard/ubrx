@@ -62,6 +62,7 @@ MAX_LDN          = 0x20	# Maximum number of LDNs we test for UART functionality
 USE_IO_DELAY     = 1	# Add a few idle cycles between in/out operations in close
 			# sequence. This significantly increases the payload size
 			# but might be safer, as per various BIOS ROMs disassembly.
+USE_DIAGNOSTIC   = 1	# Send POST codes to a BIOS diagnostics card
 
 
 /********************************************************************************/
@@ -92,6 +93,9 @@ COM_LCR          = 0x03	# Line Control Register
 COM_MCR          = 0x04	# Modem Control Registrer
 COM_LSR          = 0x05	# Line Status Register
 COM_SCR          = 0x07	# Scratch register
+# PCI
+PCI_ADDR         = 0xCF8
+PCI_DATA         = 0xCFC
 /********************************************************************************/
 
 
@@ -114,10 +118,12 @@ COM_SCR          = 0x07	# Scratch register
 
 # Issue a POST code to an optional diagnostic card. Modifies AL.
 .macro DIAG value
-.ifnes "\value", "al"
+.if USE_DIAGNOSTIC
+  .ifnes "\value", "al"
 	mov  al, \value
-.endif
+  .endif
 	out  0x80, al
+.endif
 .endm
 
 # Add a 6 CPU cycles delay
@@ -127,6 +133,46 @@ COM_SCR          = 0x07	# Scratch register
 9:	jmp  9f			# Label '9' is not used in the program
 9:
 .endif
+.endm
+
+# PCI helpers
+.macro PCI_ADDROUT bus, device, function, address
+	mov eax, 0x80000000 | (\bus << 24) | (\device << 11) | (\function << 8) | \address
+	mov dx, PCI_ADDR
+	out dx, eax
+.endm
+.macro PCI_IN8 bus, device, function, address
+	PCI_ADDROUT \bus, \device, \function, \address
+	mov dx, PCI_DATA
+	in  al, dx
+.endm
+.macro PCI_OUT8 bus, device, function, address, data
+	PCI_ADDROUT \bus, \device, \function, \address
+	mov dx, PCI_DATA
+	mov al, \data
+	out dx, al
+.endm
+.macro PCI_IN16 bus, device, function, address
+	PCI_ADDROUT \bus, \device, \function, \address
+	mov dx, PCI_DATA
+	in  ax, dx
+.endm
+.macro PCI_OUT16 bus, device, function, address, data
+	PCI_ADDROUT \bus, \device, \function, \address
+	mov dx, PCI_DATA
+	mov ax, \data
+	out dx, ax
+.endm
+.macro PCI_IN32 bus, device, function, address
+	PCI_ADDROUT \bus, \device, \function, \address
+	mov dx, PCI_DATA
+	in  eax, dx
+.endm
+.macro PCI_OUT32 bus, device, function, address, data
+	PCI_ADDROUT \bus, \device, \function, \address
+	mov dx, PCI_DATA
+	mov eax, \data
+	out dx, eax
 .endm
 
 # If using the calls below from a subroutine, remember to stack SP
@@ -206,7 +252,10 @@ init:
 	ROM_CALL wait_timer
 
 	DIAG 0x30
-
+	
+	# Access to LPC bus may need to be enabled after reset.
+	ROM_CALL lpc_init
+	
 	# The Super I/O bases we probe (0x2E, 0x4E, 0x370, 0x3F0) are deemed safe as any
 	# post '95 Super I/O is expected to start in PnP mode rather than legacy, and we
 	# are not currently aware of any motherboard using a chip likely to create a
@@ -296,7 +345,7 @@ test_ldn:
 	jne  0f
 	inc  ah
 0:	inc  bl
-	cmp  bl, MAX_LDN
+	cmp  bl, 0x08		# 8 instead of MAX_LDN, to have at most 3 bits modified
 	jl   test_ldn
 	cmp  ah, 0x02
 	jl   restore_base_1	# if less than 2 LDNs stuck, it's unlikely to be a PnP Super I/O
@@ -453,6 +502,43 @@ halt:
 /********************************************************************************/
 /* Subroutines:                                                                 */
 /********************************************************************************/
+
+# MODIFIES EAX, DX
+# Init LPC access for chipset that require it (ICH6 and later, SB7x0/SB8x0/SB9x0)
+# IN: none
+# OUT: none
+lpc_init:
+	PCI_IN16 0, 0x1e, 0, 0x00	# ICH DMI to PCI bridge
+	cmp  ax, 0x8086			# VID = Intel
+	jne  lpc_amd
+	PCI_IN16 0, 0x1e, 0, 0x02	# ICH DMI to PCI bridge
+	DIAG al
+	mov  cx, 5000 
+	PUSH_SP
+	ROM_CALL wait_timer
+	POP_SP
+	PCI_IN16 0, 0x1e, 0, 0x02	# ICH DMI to PCI bridge	
+	cmp  ax, 0x244e			# PID = ICH (desktop)
+	je   lpc_intel
+	cmp  ax, 0x2448			# PID = ICH-M (mobile)
+	jne  lpc_amd
+lpc_intel:	
+	# TODO: init according to COM_BASE
+	# I found the hard way that 16 bit accesses did not work!
+	PCI_OUT32 0, 0x1f, 0, 0x80, 0x30030010	# COMA@0x3F8, COMB@0x2F8, 0x2E, 0x4E
+	jmp  sp
+lpc_amd:
+	PCI_IN16 0, 0x1e, 3, 0x00	# SBxx0 LPC ISA Bridge
+	cmp  ax, 0x1002			# VID = AMD
+	jne  lpc_exit
+	PCI_IN16 0, 0x1e, 3, 0x00
+	cmp  ax, 0x439d			# PID = SB LPC ISA Bridge
+	jne  lpc_exit
+	# TODO: AMD init
+	# • Write LPC_enable bit in function 0, register 64, bit 20.
+	# • Enable LPC address decode ranges.
+lpc_exit:
+	jmp  sp
 
 # MODIFIES: DX, AX, EDI
 # Write data to PnP Super I/O
