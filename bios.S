@@ -136,40 +136,22 @@ PCI_DATA         = 0xCFC
 .endm
 
 # PCI helpers
-.macro PCI_ADDROUT bus, device, function, address
+.macro PCI_CONF_ADDROUT bus, device, function, address
+.if \address & 0x03
+.print "PCI config address must be 32 bit aligned"
+.abort
+.endif
 	mov eax, 0x80000000 | (\bus << 24) | (\device << 11) | (\function << 8) | \address
 	mov dx, PCI_ADDR
 	out dx, eax
 .endm
-.macro PCI_IN8 bus, device, function, address
-	PCI_ADDROUT \bus, \device, \function, \address
-	mov dx, PCI_DATA
-	in  al, dx
-.endm
-.macro PCI_OUT8 bus, device, function, address, data
-	PCI_ADDROUT \bus, \device, \function, \address
-	mov dx, PCI_DATA
-	mov al, \data
-	out dx, al
-.endm
-.macro PCI_IN16 bus, device, function, address
-	PCI_ADDROUT \bus, \device, \function, \address
-	mov dx, PCI_DATA
-	in  ax, dx
-.endm
-.macro PCI_OUT16 bus, device, function, address, data
-	PCI_ADDROUT \bus, \device, \function, \address
-	mov dx, PCI_DATA
-	mov ax, \data
-	out dx, ax
-.endm
-.macro PCI_IN32 bus, device, function, address
-	PCI_ADDROUT \bus, \device, \function, \address
+.macro PCI_CONF_IN32 bus, device, function, address
+	PCI_CONF_ADDROUT \bus, \device, \function, \address
 	mov dx, PCI_DATA
 	in  eax, dx
 .endm
-.macro PCI_OUT32 bus, device, function, address, data
-	PCI_ADDROUT \bus, \device, \function, \address
+.macro PCI_CONF_OUT32 bus, device, function, address, data
+	PCI_CONF_ADDROUT \bus, \device, \function, \address
 	mov dx, PCI_DATA
 	mov eax, \data
 	out dx, eax
@@ -508,36 +490,24 @@ halt:
 # IN: none
 # OUT: none
 lpc_init:
-	PCI_IN16 0, 0x1e, 0, 0x00	# ICH DMI to PCI bridge
-	cmp  ax, 0x8086			# VID = Intel
-	jne  lpc_amd
-	PCI_IN16 0, 0x1e, 0, 0x02	# ICH DMI to PCI bridge
-	DIAG al
-	mov  cx, 5000 
-	PUSH_SP
-	ROM_CALL wait_timer
-	POP_SP
-	PCI_IN16 0, 0x1e, 0, 0x02	# ICH DMI to PCI bridge	
-	cmp  ax, 0x244e			# PID = ICH (desktop)
+	# PCI Configuration space is 32 bit aligned
+	PCI_CONF_IN32 0, 0x1e, 0, 0x00	# ICH DMI to PCI bridge
+	cmp  eax, 0x244e8086		# Intel ICH# (desktop)
 	je   lpc_intel
-	cmp  ax, 0x2448			# PID = ICH-M (mobile)
-	jne  lpc_amd
-lpc_intel:	
-	# TODO: init according to COM_BASE
-	# I found the hard way that 16 bit accesses did not work!
-	PCI_OUT32 0, 0x1f, 0, 0x80, 0x30030010	# COMA@0x3F8, COMB@0x2F8, 0x2E, 0x4E
+	cmp  eax, 0x24488086		# Intel ICH-M# (mobile)
+	je   lpc_intel
+	PCI_CONF_IN32 0, 0x1e, 3, 0x00	# AMD SBxx0
+	cmp  eax, 0x439d1002		# AMD SB LPC ISA Bridge
+	je   lpc_amd
 	jmp  sp
 lpc_amd:
-	PCI_IN16 0, 0x1e, 3, 0x00	# SBxx0 LPC ISA Bridge
-	cmp  ax, 0x1002			# VID = AMD
-	jne  lpc_exit
-	PCI_IN16 0, 0x1e, 3, 0x00
-	cmp  ax, 0x439d			# PID = SB LPC ISA Bridge
-	jne  lpc_exit
 	# TODO: AMD init
 	# • Write LPC_enable bit in function 0, register 64, bit 20.
 	# • Enable LPC address decode ranges.
-lpc_exit:
+	jmp sp
+lpc_intel:
+	# TODO: init according to COM_BASE
+	PCI_CONF_OUT32 0, 0x1f, 0, 0x80, 0x30030010	# COMA@0x3F8, COMB@0x2F8, 0x2E, 0x4E
 	jmp  sp
 
 # MODIFIES: DX, AX, EDI
