@@ -8,24 +8,23 @@ platform BIOSes, such as the one found on most AMD or Intel based PCs.
 It aims at providing a universal way of performing system recovery operations
 such as flashing a BIOS or running a low level debugger, for x86 systems,
 through the provision of a serial console. This mode of operation is also
-sometimes called "panic room" mode.
+called "panic room" mode.
 
-The main goal of UBRX is to provide a base that is fully hardware agnostic,
-meaning for instance that the exact same UBRX binary will be able to provide a
-recovery console regardless of the CPU or chipset being used. In effect, this
-means that you should be able to pick a BIOS from one machine where UBRX has
-already been installed, put it in another PC, and reflash the BIOS payload
-directly on the target through the recovery console, even if the CPUs, chipsets
-and Super I/O of the 2 computers are entirely different.
-In short, an UBRX bootblock should work exactly the same, without needing
-reinstallation, regardless of the hardware you have.
+The main goal of UBRX is to provide a base that is hardware agnostic, meaning
+for instance that the same UBRX binary can provide a recovery console regardless
+of the CPU or chipset being used. In practice, this means that you should be
+able to pick an UBRX BIOS from one machine, put it in another, and be able to
+enter the UBRX console to reflash the BIOS payload without having to change
+anything, even if the CPUs, chipsets and Super I/O of the 2 computers are
+entirely different.
 
-The advantage we see in such a feature is that it could help with coreboot
-development for platforms that are not yet supported by the project, through the
-provision of a recovery/development console that is expected to work on any
-recent system, and where a development BIOS can easily be tested.
-The other advantage has of course to do with in-situ BIOS recovery for systems
-using a BIOS that includes UBRX.
+The advantage we see in such a feature, besides the advantage of having a single
+codebase, is that it can help with coreboot development for platforms that are
+not yet supported by the project, through the provision of a recovery and
+development console that should work out of the box, and where a development
+BIOS can easily be tested.
+another advantage has of course to do with in-situ BIOS recovery for any system
+relying on an UBRX enabled BIOS.
 
 
 Current Status
@@ -33,58 +32,58 @@ Current Status
 
 UBRX is currently a *PROOF OF CONCEPT*.
 
-The current aim is to demonstrate that creating a generic x86 'panic mode'
-bootblock is achievable, by demoing "universal" panic-room entry detection and
-serial console.
+The current aim is to demonstrate that creating a universal x86 'panic mode'
+bootblock is achievable, by demoing chipset detection and serial console.
 
-At this stage, to actually be useful, UBRX is missing critical parts such as CAR
-(Cache As RAM) initialization as well as Y-modem transfer for execution of bare
-metal executables.
+At this stage to actually be useful, UBRX is missing critical parts such as CAR
+(Cache As RAM) initialization as well as Y-modem upload for for the running of
+executbales in cache (to initialize the RAM, add a debugger, reflash the BIOS or
+simply test chipset features for BIOS development).
 
-However, our implementation leads us to believe that implementing a generic UART
-detection as well as a recovery console can easily be achieved in a 8 KB
-bootblock. The current SuperIO/UART detection part takes around 1.5 KB (which
-can be optimized further) and even with anticipated future requirements
-improvements, we have reasons to believe that, in a 8 KB bootblock, at least 6
-KB should remain available for a generic CAR + Y-Modem functions implementation,
-which ought to be enough.
+Even so, our implementation leads us to believe that generic UART detection as
+well as a feature complete recovery console can be achieved in a 8 KB bootblock.
+The current SuperIO/UART detection part takes les than 2 KB (which could be
+optimized further) which should leave at least 6 KB for a generic CAR + Y-Modem
+implementation.
 
 
 Limitations
 -----------
 
 Because of the diversity and history of the x86 PC platform, it should be fairly
-obvious that providing truly universal serial recovery console is a challenge
-that is unlikely to fit in the very limited bootblock area of a BIOS, therefore,
-the following restrictions are currently in effect:
+obvious that there exists some restrictions with regards to the "universal"
+qualifier. They are currently as follow:
 
-* console over USB-RS232 adapters is not supported.
+* The motherboard must have a physical serial port, provided by a Super I/O chip.
+  Console over USB-RS232 adapters is not supported.
 * Only AMD and Intel x86 CPUs are supported.
 * The CPU must support the MMX instruction set (Intel Pentium MMX or
-  later, AMD K6 or later). This is because we use MMX as a limited stack.
+  later, AMD K6 or later - this is because we use MMX stack operations).
 * Only Super I/O chipsets conforming to the ISA PnP specifications, and
   starting in PnP mode on reset are supported (except if VMware compatible)
-* Some non widespread Super I/O chips with complex config mode (eg. IT8671)
+* Some non widespread PnP Super I/O chips with complex config mode (eg. IT8671)
   have voluntarily been dropped.
-* Powering up of Super I/O Logical Devices (PnP register 22) is not conducted as
-  we currently assert that UARTs are powered up by default.
+* Powering up of Super I/O Logical Devices is not currently conducted. We assert
+  that UARTs are powered up by default (but may review that assertion).
 * With regards to Super I/O chips that require extra configuration from the
-  Southbridge (for LPC bus access), currently only the Intel ICH (all versions
-  that require it) and AMD SB7x0/SB8x0/SB9x0 initialization modes are supported.
+  Southbridge for LPC bus access, only Intel ICH# (any version that requires it)
+  and AMD SB6x0-SB9x0 are supported.
 
 The limitations above are unlikely to be much of an impact, unless you have a
-very old system. Each of these limitations can be addressed in a non POC version
-of UBRX if needed.
+an old system. Moreover, these limitations are mostly a result of a design
+choice (or lack of datasheets in the case of nVidia chipset support), and can
+be addressed in a non POC version of UBRX if needed.
 
 
 Build Instructions
 ------------------
 
 To build UBRX you need a GNU C compiler toolchain that can produce x86 code:
- * On x86 Linux, the standard toolchain should do. Cross compilation should
-   also work for non x86 architectures
- * On Windows, either of cygwin, MinGW32 or MinGW-w64 will do
- * On OSX, XCode cannot be used so you need to install a proper GNU toolchain
+ * On x86 Linux (32 or 64 bit), the standard toolchain should do. Cross
+   compilation should also work for non x86 architectures.
+ * On Windows, either of cygwin, MinGW32 or MinGW-w64 will do.
+ * On OSX, you will need to install as proper GNU toolchain as XCode cannot be
+   used.
 
 To compile, simply invoke:
 
@@ -92,77 +91,82 @@ To compile, simply invoke:
 
 The above will build a 512 KB BIOS ROM that only contains the UBRX bootblock.
 To build a BIOS ROM of a different size, you can either invoke 'make' with one
-of the 128k, 256k, 512k, 1m or 2m options, or you can define a ROM_SIZE
+of the 128k, 256k, 512k, 1m or 2m options. Or you can define a ROM_SIZE
 environment variable to one of these parameters.
-The generated file is called 'bios.rom', which you can then flash directly
-onto a BIOS chip. In case this needs to be pointed out, remember that this
-BIOS does not provide anything, so you MUST ensure that have means to 
-restore your BIOS, with an external programmer, before flashing it.
-
 The size of a bootblock, which currently defaults to 8K, can also be set
 through a BB_SIZE environment variable or by editing the Makefile directly.
 
-Please consult the Makefile to find out how you can also invoke the building
-and flashing of target specific UBRX BIOS ROMs.
+The generated file is called 'bios.rom', which you can then flash directly
+onto a BIOS chip. In case this needs to be pointed out, remember that this
+BIOS does not provide anything, not even an actually functional console, so you
+MUST have means to restore your BIOS, with an external programmer, before you
+attempt to flash an UBRX one.
 
-Build options, that can be modified, are also documented at the top of the 
-bios.S source.
+Please consult the Makefile to find out how you can also invoke the building
+and flashing of target specific UBRX BIOS ROMs. Build options can be modified,
+and are also documented at the top of the bios.S source.
 
 
 Testing
 -------
 
 Once UBRX has been flashed onto your BIOS chip, you should connect one of its
-serial port to another computer with a Null Modem cable, open a console on this
-second machine (115200, 8N1, no hardware handshaking) and power up the first
-machine while pressing the Space Bar in the console. You should end up with an
-ubrx> prompt and a serial repeater.
+serial port to another computer with a Null Modem cable, open a console (115200
+bauds, 8N1, no hardware handshaking) and then power up the machine with the UBRX
+BIOS while pressing the Space Bar in the console window.
+You should then end up with an 'ubrx>' prompt and a serial repeater.
 
 Since UBRX can easily be tested on VMware, we encourage first running a test
 there, before trying on real hardware. For more information on VMware testing
-you can check http://pete.akeo.ie/2011/06/crafting-bios-from-scratch.html
+you can check http://pete.akeo.ie/2011/06/crafting-bios-from-scratch.html.
 
 
 Detection primer
 ----------------
 
 The paragraphs below highlight the generic Super I/O and 16550 UART detection
-process as performed by UBRX. We believe that this process is both safe and can
-be executed at every boot irrespective of the hardware, without side effects.
+process as performed by UBRX. We believe that this process is safe to be
+executed at every boot, irrespective of the hardware and without side effects.
 
 The 2 main components UBRX needs to detect are:
-1. a potential PnP Super I/O candidate
-2. a potential 16650 UART Logical Device (LD) on the Super I/O chip
+1. a potential PnP Super I/O candidate.
+2. a potential 16650 UART Logical Device (LD) on the Super I/O chip.
 
 As we start with absolutely no knowledge of the hardware, and must avoid writing
 data at random, since doing so can damage the hardware, our detection process
-is designed with safety in mind from the ground up.
-Below is a description of how we made sure that our probing is as innocuous as
-possible to the wide range of hardware we have to support.
+has been designed with safety in mind from the ground up, by ensuring that write
+operations were limited to the bare minimum, and only executed after we had some
+assurance that the destination for the write would match the expectation.
+Below is a detailed description of how we ensure that our generic detection
+process is as inocuous to the hardware as possible.
 
 1. The Super I/O chip is accessed through the LPC bus, which is not always
    accessible after reset, so we may have to enable LPC/SuperIO access first.
    Currently we only support Intel ICH# (all versions) and AMD SB6x0-9x0.
-   The detection and initialisation of the ICH# chipset for LPC access is safe,
-   as it is PCI based, and the PCI VID:PID of the South Bridge is well know and
-   can be read to unconditionaly identify an supported chip before we proceed
-   with LPC initiation.
-   You will notice that we use a blanket LPC initialization, but this is only 
-   the result of a *thorough* review of all the Intel ICH# and AMD SBxx0 
-   datasheets to confirm that LPC init could indeed be factorized, even for the
-   chips (ICH5 or earlier) that don't require it (no configuration registers 
-   exist for those, so we can simply let the PCI transaction fail).
+   The detection and initialisation of the chipset for LPC access is safe,since
+   it is PCI based, and the PCI VID:PID of the South Bridge can be read
+   beforehand to unconditionaly identify a supported chip before we proceed with
+   LPC initiation.
+   You will notice that we use a blanket LPC initialization, as we don't
+   distinguish between versions of the SouthBridge (eg: ICH6 is initalized the
+   same as ICH9), but this is the result of a *thorough* review of all the Intel
+   ICH# and AMD SBxx0 datasheets, to confirm that LPC init could indeed be
+   factorized. Even for the chips that don't require LPC initialization(such as
+   Intel ICH5 or earlier) and for which we do send the LPC initilization command,
+   we have confirmed from the datasheet that we can simply let the PCI
+   transaction fail as no register conflict in the destination config space.
    As such our LPC bus access initialization is deemed safe.
 
-2. With LPC bus accessible, we must probe a few common Super I/O ports.
+2. With the LPC bus accessible, we must probe a few common Super I/O ports.
    Currently, these are 0x2E, 0x4E, 0x370, 0x3f0, as well as their +1 data port.
    The last two I/O ports are commonly assigned to Tape and FDC so we expect any
-   chip there to withstand unintended writes. But even then, the extra checks we
-   apply to the 0x2E and 0x4E ports will apply. With regards to 0x2E and 0x4E,
-   these are more problematic as a non PnP Super I/Os are expected to reside
-   there, and unchecked write access (such as trying to configure PnP access on
-   a non PnP aware chip) may have unintended consequences. To alleviate this
-   problem we:
+   chip there to withstand unintended writes (plus these can be disabled through
+   the bios.S build options). But even then, the extra checks we apply to the
+   0x2E and 0x4E ports ensure safe access. With regards to 0x2E and 0x4E, these
+   are more problematic as a non PnP Super I/Os are expected to reside there on
+   older machines, and unchecked write access (such as trying to configure PnP
+   access on a non PnP aware chip) could very well have unintended consequences.
+   To alleviate this problem we:
    a) always keep a copy of the original value at base and base+1
    b) perform PnP enter conf (write to base only) and attempt to read the Super
       I/O ID (at base +1). If the id is either 0x00 of 0xff, we consider that
@@ -171,8 +175,8 @@ possible to the wide range of hardware we have to support.
    c) attempt to write 8 LDN values, read them back and check that at least 2 of
       them stick, indicating that the potential PnP Super I/O chip has at least
       2 LDs. If this isn't the case, we also restore the content from base+1 and
-      declare the PnP access to have failed. At most, this modifies the 3 lowest
-      bits of base +1.
+      declare the PnP access to have failed. At most, since we are only writing
+      LDNs, this modifies the 3 lowest bits of base +1.
    Considering that both superiotool and sensors-detect have let user perform
    similar Super I/O probing (without the extra restore step), and we are not
    aware of problems, as well as the fact that any recent PC from our targeted
@@ -198,7 +202,7 @@ possible to the wide range of hardware we have to support.
    At the moment, we test up to 32 LDNs per potential PnP Super I/O for UART
    access. The 16550 tests are heavily documented in bios.S/check_16550.
 
-Only once we have succesfully identified a 16650 UART do we attempt to read the
-panic request key. If multiple UARTs have been identified, they will be checked
-in sequence, meaning that any serial port available on the motherboard can be
-used for console access.
+Only once we have succesfully identified a 16650 UART do we attempt to fully
+configure it and read the console request key. If multiple UARTs have been
+identified, these will be checked in sequence, meaning that any serial port
+available on the motherboard can be used for console access.

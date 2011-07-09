@@ -44,7 +44,7 @@
 /********************************************************************************/
 /* Build variables:                                                             */
 /********************************************************************************/
-COM_BASE         = 0x3F8	# See further donw for valid I/O values
+COM_BASE         = 0x3F8 # See further down for valid I/O values
 PANIC_KEY        = ' '  # Key to press to enter panic mode (default: <SPACE>)
 PANIC_COUNT      = 5    # Number of times the key must be read to access panic mode
 VMWARE_SUPPORT   = 1	# Include support for VMware platform. 
@@ -63,6 +63,7 @@ USE_IO_DELAY     = 1	# Add a few idle cycles between in/out operations in close
 			# sequence. This significantly increases the payload size
 			# but might be safer, as per various BIOS ROMs disassembly.
 USE_DIAGNOSTIC   = 1	# Send POST codes to a BIOS diagnostics card
+TEST_EXTRA_PORTS = 1	# Test additional Super I/O ports beside 0x2E & 0x4E
 
 
 /********************************************************************************/
@@ -483,6 +484,7 @@ vm_restore:
 	mov  al, bh
 	out  dx, al
 .endif
+	DIAG 0xFF
 	jmp  halt		# If compiled without VMware support
 
 enter_panic:
@@ -491,7 +493,7 @@ print_hello:			# Print a string
 	mov  si, offset hello_string
 	ROM_CALL print_string
 
-serial_repeater:		# The "console" is a simple serial repeater
+serial_repeater:		# For now the "console" is a simple serial repeater
 	mov  cx, 0
 	ROM_CALL readchar
 	ROM_CALL putchar
@@ -499,7 +501,6 @@ serial_repeater:		# The "console" is a simple serial repeater
 
 # TODO: proceed to booting normal BIOS
 halt:
-	DIAG 0xF0
 0:	hlt
 	jmp  0b
 
@@ -1073,7 +1074,9 @@ cp_exit:
 SETUP_STACK_DATA		# See mmx_stack.inc
 pnp_superio_base:		# Base addresses we test for a Super I/O chip
 	.word 0x2e, 0x4e
+.if TEST_EXTRA_PORTS
 	.word 0x370, 0x3f0
+.endif
 pnp_superio_base_end:
 serial_conf:			# See http://www.versalogic.com/kb/KB.asp?KBID=1395
 	.byte COM_MCR, 0x00	# RTS/DTS off, disable loopback
