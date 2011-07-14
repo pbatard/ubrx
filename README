@@ -36,8 +36,8 @@ The current aim is to demonstrate that creating a universal x86 'panic mode'
 bootblock is achievable, by demoing chipset detection and serial console.
 
 At this stage to actually be useful, UBRX is missing critical parts such as CAR
-(Cache As RAM) initialization as well as Y-modem upload for for the running of
-executbales in cache (to initialize the RAM, add a debugger, reflash the BIOS or
+(Cache As RAM) initialization as well as Y-modem upload for the running of
+executables in cache (to initialize the RAM, add a debugger, reflash the BIOS or
 simply test chipset features for BIOS development).
 
 Even so, our implementation leads us to believe that generic UART detection as
@@ -138,21 +138,21 @@ has been designed with safety in mind from the ground up, by ensuring that write
 operations were limited to the bare minimum, and only executed after we had some
 assurance that the destination for the write would match the expectation.
 Below is a detailed description of how we ensure that our generic detection
-process is as inocuous to the hardware as possible.
+process is as innocuous to the hardware as possible.
 
 1. The Super I/O chip is accessed through the LPC bus, which is not always
    accessible after reset, so we may have to enable LPC/SuperIO access first.
    Currently we only support Intel ICH# (all versions) and AMD SB6x0-9x0.
-   The detection and initialisation of the chipset for LPC access is safe,since
+   The detection and initialisation of the chipset for LPC access is safe, since
    it is PCI based, and the PCI VID:PID of the South Bridge can be read
-   beforehand to unconditionaly identify a supported chip before we proceed with
+   beforehand to unconditionally identify a supported chip before we proceed with
    LPC initiation.
    You will notice that we use a blanket LPC initialization, as we don't
-   distinguish between versions of the SouthBridge (eg: ICH6 is initalized the
+   distinguish between versions of the SouthBridge (eg: ICH6 is initialized the
    same as ICH9), but this is the result of a *thorough* review of all the Intel
    ICH# and AMD SBxx0 datasheets, to confirm that LPC init could indeed be
    factorized. Even for the chips that don't require LPC initialization(such as
-   Intel ICH5 or earlier) and for which we do send the LPC initilization command,
+   Intel ICH5 or earlier) and for which we do send the LPC initialization command,
    we have confirmed from the datasheet that we can simply let the PCI
    transaction fail as no register conflict in the destination config space.
    As such our LPC bus access initialization is deemed safe.
@@ -193,7 +193,7 @@ process is as inocuous to the hardware as possible.
    only accesses, that the registers match the reset value of a 16550 compliant
    unit. Then, we try to flip the furthest 'safe' bit in the I/O range
    (register 7, bit 6, with backup), to eliminate any LD that has less than 7
-   registers. Then we check a singificant unflippable bit from the 16550
+   registers. Then we check a significant unflippable bit from the 16550
    register range (which we also restore in case of failure), and finish our
    testing with a complete UART loopback test. In all, we perform no less than
    16 tests to confirm that an LD is indeed a 16550 UART, with more than 30
@@ -202,7 +202,8 @@ process is as inocuous to the hardware as possible.
    At the moment, we test up to 32 LDNs per potential PnP Super I/O for UART
    access. The 16550 tests are heavily documented in bios.S/check_16550.
 
-Only once we have succesfully identified a 16650 UART do we attempt to fully
+Only once we have successfully identified a 16650 UART do we attempt to fully
 configure it and read the console request key. If multiple UARTs have been
 identified, these will be checked in sequence, meaning that any serial port
 available on the motherboard can be used for console access.
+ 

@@ -65,6 +65,18 @@ USE_IO_DELAY     = 1	# Add a few idle cycles between in/out operations in close
 USE_DIAGNOSTIC   = 1	# Send POST codes to a BIOS diagnostics card
 TEST_EXTRA_PORTS = 1	# Test additional Super I/O ports beside 0x2E & 0x4E
 
+# If you want to bypass (some of) the autodetection, and know your Super I/O base
+# as well as the LDN of the UART, you can provide them below.
+SUPERIO_BASE     = 0x3f0	# Super I/O base address
+SUPERIO_UART_LDN = 2	# LDN of the UART to use
+SUPERIO_TYPE     = 2	# 0 = NS, 1 = SMSC, 2 = VIA/Winbond/Nuvoton/Fintek,
+			# 3 = Intel, 4 = ITE
+
+# AMD SB8x0 extra build options (TODO: conditional SB800 detection)
+SB800_48MHZ_INIT = 1	# Set to 1 to force 48 MHz clock init of AMD SB8x0 SouthBridge
+			# ONLY DO SO IF YOU HAVE AN SB8x0 THAT REQUIRES IT
+SB800_MMIO_PAGE  = 0x8000
+
 
 /********************************************************************************/
 /* Constants:                                                                   */
@@ -97,6 +109,9 @@ COM_SCR          = 0x07	# Scratch register
 # PCI
 PCI_ADDR         = 0xCF8
 PCI_DATA         = 0xCFC
+# AMD SBxx0 PM Register
+AMD_SB_PM_ADDR   = 0xCD6
+AMD_SB_PM_DATA   = 0xCD7
 # According to the serial base, we need to set the I/O Range configuration differently
 # See the various datasheets for reference
 .if COM_BASE == 0x3F8
@@ -153,8 +168,12 @@ PCI_DATA         = 0xCFC
 
 # Read current super I/O base from data section (global pointer in MM0)
 .macro  GET_SUPERIO_BASE
+.ifdef SUPERIO_BASE
+	mov  dx, SUPERIO_BASE
+.else
 	movd edi, mm0
 	mov  dx, [di]
+.endif
 .endm
 
 # Issue a POST code to an optional diagnostic card. Modifies AL.
@@ -294,7 +313,11 @@ check_pnp_base:
 	PUSHX al		# keep a copy of the original value of [base]
 	in   al, dx
 	# Enter conf mode
+.ifdef SUPERIO_TYPE
+	mov  cl, SUPERIO_TYPE
+.else
 	xor  cl, cl
+.endif
 
 enter_pnp_conf:
 	DIAG cl
@@ -333,6 +356,7 @@ enter_pnp_conf:
 	IO_DELAY
 
 read_id:
+	DIAG 0xF1
 	xor  ah, ah		# clear panic result
 	mov  al, PNP_ID		# attempt to read PnP Super I/O chip ID
 	out  dx, al
@@ -347,6 +371,8 @@ read_id:
 
 	# Extra safety test #1: try to change the id at [base+1] - it should not work
 	mov  bl, al
+	DIAG 0xF2
+	mov  al, bl
 	xor  al, 0x02		# flip only one of the lower bits
 	out  dx, al
 	IO_DELAY
@@ -355,6 +381,7 @@ read_id:
 	jne  restore_base_1	# the value has changed => not a PnP Super I/O
 
 	# Extra safety test #2: Set LDN numbers and confirm that at least 2 of them stick
+	DIAG 0xF3
 	dec  dx
 	mov  al, PNP_LDN
 	out  dx, al
@@ -412,8 +439,10 @@ exit_pnp_conf:
 2:	inc  cl
 	or   ah, ah
 	jne  0f			# cut short if panic mode was successfull
+.ifndef SUPERIO_TYPE
 	cmp  cl, 0x04
 	jl   enter_pnp_conf	# try next config key with same base
+.endif
 
 0:	dec  dx			# base
 	POPXP al		# original value of [base]
@@ -422,11 +451,13 @@ exit_pnp_conf:
 	jne  enter_panic	# success
 	out  dx, al		# restore the original value at [base]
 
+.ifndef SUPERIO_BASE
 	movd edi, mm0		# try next Super I/O base
 	add  di, 0x02
 	movd mm0, edi		# keep the updated copy
 	cmp  di, offset pnp_superio_base_end
 	jne  check_pnp_base	# try next base
+.endif
 	
 	# No success from PNP Super I/O check => fallback to VMware (or exit)
 .if VMWARE_SUPPORT
@@ -529,7 +560,48 @@ lpc_init:
 lpc_amd:
 	PCI_CONF_OUT32 0, 0x14, 3, 0x44, AMD_SB_IO
 	PCI_CONF_OUT32 0, 0x14, 3, 0x48, 0x0000ff03	# 0x2E/0x4E forwarding, everything else disabled
-	jmp sp
+
+.if SB800_48MHZ_INIT	# Force SB8x0 48 MHz on clk1 (DOES NOT CHECK FOR SB8x0!)
+	# We have the choice of switching to 32 bit, to use the MMIO default base of 0xFED80000
+	# or change this base to a 20 bit address (real-mode). We choose the latter
+	mov  dx, AMD_SB_PM_ADDR
+	mov  al, 0x27			# AcpiMmioEn (MSB)
+	out  dx, al
+	inc  dx
+	xor  al, al			# Set AcpiMMioAddr to something we can access in real mode
+	out  dx, al
+	dec  dx
+	mov  al, 0x26
+	out  dx, al
+	inc  dx
+	mov  al, SB800_MMIO_PAGE >> 12
+	out  dx, al
+	dec  dx
+	mov  al, 0x25
+	out  dx, al
+	inc  dx
+	in   al, dx
+	and  al, 0x0f
+	or   al, (SB800_MMIO_PAGE >> 4) & 0xf0
+	out  dx, al
+	dec  dx
+	mov  al, 0x24			# AcpiMmioEn (LSB)
+	out  dx, al
+	inc  dx
+	in   al, dx
+	or   al, 0x01			# enable AcpiMMio space
+	and  al, 0xfe			# disable I/O-mapped space, use Memory-mapped instead
+	out  dx, al
+	
+	mov  ax, SB800_MMIO_PAGE	# Set our base page
+	mov  ds, ax
+	mov  di, 0xe00 + 0x40		# Misc. Registers: MiscClkCntrl
+	mov  al, [di]
+	and  al, 0xf8
+	or   al, 0x02			# Enable and set Device_CLK1 (Super I/O) to 48 Mhz
+	mov  [di], al
+.endif
+	jmp  sp
 lpc_intel:
 	# LPC is device 31, function 0
 	PCI_CONF_OUT32 0, 0x1f, 0, 0x80, INTEL_SB_IO
@@ -757,7 +829,11 @@ alpha:
 check_pnp_superio:
 	PUSH_SP			# We're going to call more subroutines
 	# Disable ALL Logical Devices (main BIOS will reenable them as needed)
+.ifdef SUPERIO_UART_LDN
+	mov  bl, SUPERIO_UART_LDN
+.else
 	xor  bl, bl		# BL = Logical Device Number
+.endif
 deactivate_ldn:
 	PNP_OUT PNP_LDN, bl
 	PNP_OUT PNP_ACTIVATE, 0x00	# isolate from the ISA bus
@@ -782,6 +858,7 @@ check_ldn:
 	PUSHX bl		# keep a copy of BL (next call modifies BX)
 	ROM_CALL check_16550	# check if LD is a 16550
 	POPX bl
+	DIAG al
 	or   al, al
 	jne  next_ldn
 	ROM_CALL init_serial
@@ -797,9 +874,11 @@ next_ldn:			# Didn't qualify => disable and restore base
 	PNP_OUT PNP_ACTIVATE, 0x00
 	PNP_OUT PNP_IOBASE_HI, ch
 	PNP_OUT PNP_IOBASE_LO, cl
+.ifndef SUPERIO_UART_LDN
 	inc  bl
 	cmp  bl, MAX_LDN
 	jl   check_ldn		# next LDN to test
+.endif
 	xor  al, al		# exhausted all LDNs without success
 cps_exit:
 	POP_SP
@@ -1097,5 +1176,5 @@ hello_string:
 .section reset, "ax"
 	.byte  0xe9		# work around a binutils bug.
 	.int   init - ( . + 2 )
-	.align 16, 0xff		# fill section up to to end of ROM (with 0xFF)
+	.align 16, 0xff		# fill section up to end of ROM (with 0xFF)
 /********************************************************************************/
