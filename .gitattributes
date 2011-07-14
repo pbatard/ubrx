@@ -1,0 +1,5 @@
+*.S      eol=lf
+*.inc    eol=lf
+LICENSE  eol=lf
+README   eol=lf
+Makefile eol=lf
