@@ -66,16 +66,16 @@ USE_DIAGNOSTIC   = 1	# Send POST codes to a BIOS diagnostics card
 TEST_EXTRA_PORTS = 1	# Test additional Super I/O ports beside 0x2E & 0x4E
 
 # If you want to bypass (some of) the autodetection, and know your Super I/O base
-# as well as the LDN of the UART, you can provide them below.
-SUPERIO_BASE     = 0x3f0	# Super I/O base address
-SUPERIO_UART_LDN = 2	# LDN of the UART to use
-SUPERIO_TYPE     = 2	# 0 = NS, 1 = SMSC, 2 = VIA/Winbond/Nuvoton/Fintek,
+# as well as the LDN of the UART, you can provide them below:
+#SUPERIO_BASE     = 0x2e	# Super I/O base address
+#SUPERIO_UART_LDN = 3	# LDN of the UART to use
+#SUPERIO_TYPE     = 2	# 0 = NS, 1 = SMSC, 2 = VIA/Winbond/Nuvoton/Fintek,
 			# 3 = Intel, 4 = ITE
 
 # AMD SB8x0 extra build options (TODO: conditional SB800 detection)
-SB800_48MHZ_INIT = 1	# Set to 1 to force 48 MHz clock init of AMD SB8x0 SouthBridge
-			# ONLY DO SO IF YOU HAVE AN SB8x0 THAT REQUIRES IT
-SB800_MMIO_PAGE  = 0x8000
+SB800_48MHZ_INIT = 0	# Set to 1 to force 48 MHz clock init of AMD SB8x0 SouthBridge
+			# NOTE: ONLY DO SO IF YOU KNOW WHAT YOU ARE DOING
+SB800_MMIO_PAGE  = 0x8000	# Page to map SB8x0 MMIO 
 
 
 /********************************************************************************/
@@ -320,7 +320,6 @@ check_pnp_base:
 .endif
 
 enter_pnp_conf:
-	DIAG cl
 	GET_SUPERIO_BASE	# we're only writing to base here
 	cmp  cl, 0x00		# National Semiconductor
 	je   read_id		# no key required
@@ -515,7 +514,6 @@ vm_restore:
 	mov  al, bh
 	out  dx, al
 .endif
-	DIAG 0xFF
 	jmp  halt		# If compiled without VMware support
 
 enter_panic:
@@ -568,6 +566,12 @@ lpc_amd:
 	mov  al, 0x27			# AcpiMmioEn (MSB)
 	out  dx, al
 	inc  dx
+# DEBUG
+	DIAG 0xFE
+	in   al, dx
+	cmp  al, 0xfe			# Confirm that our MMIO mapping works
+	jne  halt
+# END_DEBUG
 	xor  al, al			# Set AcpiMMioAddr to something we can access in real mode
 	out  dx, al
 	dec  dx
@@ -829,11 +833,7 @@ alpha:
 check_pnp_superio:
 	PUSH_SP			# We're going to call more subroutines
 	# Disable ALL Logical Devices (main BIOS will reenable them as needed)
-.ifdef SUPERIO_UART_LDN
-	mov  bl, SUPERIO_UART_LDN
-.else
 	xor  bl, bl		# BL = Logical Device Number
-.endif
 deactivate_ldn:
 	PNP_OUT PNP_LDN, bl
 	PNP_OUT PNP_ACTIVATE, 0x00	# isolate from the ISA bus
@@ -842,7 +842,11 @@ deactivate_ldn:
 	jl   deactivate_ldn
 
 	# At this stage, all LDs are isolated from the ISA bus
+.ifdef SUPERIO_UART_LDN
+	mov  bl, SUPERIO_UART_LDN
+.else
 	xor  bl, bl		# BL = Logical Device Number
+.endif
 check_ldn:
 	PNP_OUT PNP_LDN, bl
 	# Keep a copy of original I/O Base
