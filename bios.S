@@ -594,7 +594,7 @@ lpc_amd:
 	inc  dx
 	in   al, dx
 	or   al, 0x01			# enable AcpiMMio space
-	and  al, 0xfe			# disable I/O-mapped space, use Memory-mapped instead
+	and  al, 0xfd			# disable I/O-mapped space, use Memory-mapped instead
 	out  dx, al
 	
 	mov  ax, SB800_MMIO_PAGE	# Set our base page
@@ -604,6 +604,8 @@ lpc_amd:
 	and  al, 0xf8
 	or   al, 0x02			# Enable and set Device_CLK1 (Super I/O) to 48 Mhz
 	mov  [di], al
+	mov  ax, cs			# restore ds
+	mov  ds, ax
 .endif
 	jmp  sp
 lpc_intel:
