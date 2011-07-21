@@ -166,6 +166,11 @@ AMD_SB_PM_DATA   = 0xCD7
 9:	# see http://sourceware.org/binutils/docs-2.21/as/Symbol-Names.html
 .endm
 
+# Fixes a binutil/ld bug where the address if off by 2 on cross section jumps
+.macro  JMP_XS addr
+	jmp  \addr + 2
+.endm
+
 # Read current super I/O base from data section (global pointer in MM0)
 .macro  GET_SUPERIO_BASE
 .ifdef SUPERIO_BASE
@@ -1173,7 +1178,6 @@ serial_conf_end:
 /* reset: this section must reside at 0xfffffff0, and be exactly 16 bytes       */
 /********************************************************************************/
 .section reset, "ax"
-	.byte  0xe9		# work around a binutils bug.
-	.int   init - ( . + 2 )
+	JMP_XS init		# When jumping between sections, ld is off by 2
 	.align 16, 0xff		# fill section up to end of ROM (with 0xFF)
 /********************************************************************************/

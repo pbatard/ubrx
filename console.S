@@ -26,11 +26,21 @@
 .code16			# After reset, the x86 CPU is in real/16 bit mode
 /********************************************************************************/
 
+# Fixes a binutil/ld bug where the address if off by 2 on cross section jumps
+.macro  JMP_XS addr
+	jmp  \addr + 2
+.endm
+
 # Jump to a subroutine
 .macro  ROM_CALL addr
 	mov  sp, offset 9f	# Use a local label as we don't know the size
 	jmp  \addr		# of the jmp instruction (can be 2 or 3 bytes)
 9:	# see http://sourceware.org/binutils/docs-2.21/as/Symbol-Names.html
+.endm
+.macro  ROM_CALL_XS addr
+	mov  sp, offset 9f
+	JMP_XS \addr
+9:
 .endm
 
 .section console, "ax"
@@ -39,12 +49,12 @@ enter_console:
 
 print_hello:			# Print a string
 	mov  si, offset hello_string
-	ROM_CALL print_string
+	ROM_CALL_XS print_string
 
 serial_repeater:		# For now the "console" is a simple serial repeater
 	mov  cx, 0
-	ROM_CALL readchar
-	ROM_CALL putchar
+	ROM_CALL_XS readchar
+	ROM_CALL_XS putchar
 	jmp  serial_repeater
 
 hello_string:
