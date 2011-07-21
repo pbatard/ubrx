@@ -257,7 +257,7 @@ AMD_SB_PM_DATA   = 0xCD7
 
 /********************************************************************************/
 /* main:                                                                        */
-/* This section will be relocated according to the bios.ld script.              */
+/* This section is relocated according to the ld script.                        */
 /********************************************************************************/
 # TODO (if reports of inactive UART LDs): PnP register 22 & power on function
 
@@ -518,15 +518,7 @@ vm_restore:
 
 enter_panic:
 	DIAG 0x80
-print_hello:			# Print a string
-	mov  si, offset hello_string
-	ROM_CALL print_string
-
-serial_repeater:		# For now the "console" is a simple serial repeater
-	mov  cx, 0
-	ROM_CALL readchar
-	ROM_CALL putchar
-	jmp  serial_repeater
+	jmp  enter_console
 
 # TODO: proceed to booting normal BIOS
 halt:
@@ -682,6 +674,7 @@ write_serial_conf:
 # Print a character to serial output
 # IN: AL = character to output
 # OUT: none
+.globl putchar
 putchar:
 	mov  dx, COM_BASE + COM_LSR
 	mov  ah, al
@@ -699,6 +692,7 @@ tx_wait:
 # Read a serial char with timeout. Wait indefinitely if timeout = 0.
 # IN: CX = timeout in ~1 ms (+/- ~1 ms => MUST be at least 2)
 # OUT: AX = character read from serial, or 0xFFFF if timeout
+.globl readchar
 readchar:
 	xor  ax, ax
 	mov  dx, RTC_ADDRESS
@@ -784,7 +778,8 @@ wait_timer:
 
 # MODIFIES: DX, AX
 # Print a NUL terminated string to serial
-# IN: SI = offset to NUL terminated string    
+# IN: SI = offset to NUL terminated string
+.globl print_string
 print_string:
 	PUSH_SP
 next_char:
@@ -1171,8 +1166,6 @@ serial_conf:			# See http://www.versalogic.com/kb/KB.asp?KBID=1395
 	.byte COM_LCR, 0x03	# Unset DLAB. Set 8N1 mode
 	.byte COM_FCR, 0x07	# Enable & reset FIFOs. DMA mode 0.
 serial_conf_end:
-hello_string:
-	.string "\r\nubrx> "	# automatically NUL terminated
 /********************************************************************************/
 
 

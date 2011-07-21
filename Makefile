@@ -24,7 +24,7 @@ ROM_SIZE  ?= 512K
 # Size of the bootblock payload (case sensitive)
 BB_SIZE   ?= 8K
 
-OBJECTS   = bios.o
+OBJECTS   = bios.o console.o
 TARGET    = bios
 MEMLAYOUT = xMemLayout.map
 
@@ -127,7 +127,7 @@ $(TARGET).ld:
 	@echo "	ENTRY(init)" >> $(ROM_SIZE).ld
 	@echo "	_assert = ASSERT(init >= 4096M - 64K, \"'init' entrypoint too low - it needs to reside in the last 64K.\");" >> $(ROM_SIZE).ld
 	@echo "	.begin : { *(begin) } >ROM" >> $(ROM_SIZE).ld
-	@echo "	.main main_address : { *(main) }" >> $(ROM_SIZE).ld
+	@echo "	.main main_address : { *(main) *(console) }" >> $(ROM_SIZE).ld
 	@echo "	.reset 4096M - 0x10 : {	*(reset) }" >> $(ROM_SIZE).ld
 	@echo "	.igot 0 : { *(.igot.plt) }" >> $(ROM_SIZE).ld
 	@echo "}" >> $(ROM_SIZE).ld
