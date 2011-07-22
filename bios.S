@@ -56,7 +56,7 @@ PERFORM_MSR_TEST = 0	# Set to nonzero if you want to have MSR test performed as
 			# part of the 16550 UART checks. 
 			# If you use VMware and direct serial to a file, you
 			# should disable this test.
-FORCE_PANIC      = 0	# Force panic mode on the first valid UART found without
+FORCE_PANIC      = 1	# Force panic mode on the first valid UART found without
 			# waiting for panic key (for testing only)
 MAX_LDN          = 0x20	# Maximum number of LDNs we test for UART functionality
 USE_IO_DELAY     = 1	# Add a few idle cycles between in/out operations in close
@@ -801,6 +801,7 @@ ps_exit:
 # Print an hex longword to serial
 # IN: EAX = longword to print in hex
 # OUT: none
+.globl print_hex
 print_hex:
 	PUSH_SP
 	mov  ebx, eax

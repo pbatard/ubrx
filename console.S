@@ -46,16 +46,46 @@
 .section console, "ax"
 .globl enter_console
 enter_console:
-
-print_hello:			# Print a string
-	mov  si, offset hello_string
+	mov  si, offset prompt_string
 	ROM_CALL_XS print_string
 
-serial_repeater:		# For now the "console" is a simple serial repeater
-	mov  cx, 0
+read_command:
+	movd mm0, eax		# A stack won't do here as we are trying to keep
+	movd mm1, ebx		# the footprint low and we may "unstack" in any order
+	movd mm2, ecx
+	movd mm3, edx
+	mov  cx, 0		# infinite timeout
 	ROM_CALL_XS readchar
-	ROM_CALL_XS putchar
-	jmp  serial_repeater
+	mov  ah, al
+	and  ah, 0xf0
+	and  al, 0x0f
+dump_eax:
+	cmp  ah, 0x20
+	jne  mov_imm_eax
+	movd eax, mm0
+	ROM_CALL_XS print_hex
+	jmp  rest
+mov_imm_eax:
+	cmp  ah, 0x30
+	jne  mov_eax_dst
+	mov  cl, 0x04
+0:	shl  ecx, 0x10
+	mov  cx, 0		# infinite timeout
+	ROM_CALL_XS readchar
+	shl  ebx, 0x08
+	mov  bl, al
+	shr  ecx, 0x10
+	dec  cl
+	jne  0b
+	movd mm0, ebx		# will be restored into EAX
+	jmp  rest
+mov_eax_dst:
+rest:
+	movd eax, mm0
+	movd ebx, mm1
+	movd ecx, mm2
+	movd edx, mm3
+	jmp  read_command
 
-hello_string:
+prompt_string:
 	.string "\r\nubrx> "	# automatically NUL terminated
