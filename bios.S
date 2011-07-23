@@ -595,14 +595,14 @@ lpc_amd:
 	out  dx, al
 	
 	mov  ax, SB800_MMIO_PAGE	# Set our base page
-	mov  ds, ax
+	mov  es, ax
 	mov  di, 0xe00 + 0x40		# Misc. Registers: MiscClkCntrl
 	mov  al, [di]
 	and  al, 0xf8
 	or   al, 0x02			# Enable and set Device_CLK1 (Super I/O) to 48 Mhz
 	mov  [di], al
-	mov  ax, cs			# restore ds
-	mov  ds, ax
+#	mov  ax, es			# restore ds
+#	mov  es, ax
 .endif
 	jmp  sp
 lpc_intel:
