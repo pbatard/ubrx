@@ -80,14 +80,16 @@ enter_console:
 # RoC (RISC on CISC)
 # We use MM0, MM1, MM2 and MM3 in lieu of EAX/EBX/ECX/EDX respectively
 read_command:
-	mov  cx, 0		# infinite timeout
 	xor  eax, eax
+# TODO: factorise this	
+	xor  cx, cx		# infinite timeout
 	ROM_CALL_XS readchar
 	ROM_CALL_XS putchar
 	cmp  al, 0x0d
 	jne  0f
 	mov  al, 0x0a
 	ROM_CALL_XS putchar
+#	
 0:	cmp  al, 0x20
 	jle  read_command	# ignore carriage returns, tabs, space, etc.
 	movd ebx, mm1		# 
@@ -108,12 +110,22 @@ move_imm:
 	cmp  al, OP_MOVE_IMM
 	jne  cmd_wrmsr
 	mov  cl, 0x08
+	xor  ebx, ebx
 0:	shl  ecx, 0x10
-3:	mov  cx, 0		# infinite timeout
+3:	xor  cx, cx		# infinite timeout
 	ROM_CALL_XS readchar
 	ROM_CALL_XS putchar
-	cmp  al, 0x20		# ignore whitespaces
-	jle  3b
+	cmp  al, 0x0d
+	jne  1f
+	mov  al, 0x0a
+	ROM_CALL_XS putchar	
+1:	shr  ecx, 0x10
+	cmp  al, '0'		# ignore whitespaces
+	jge  1f
+	cmp  cl, 0x08		# a whitespace encountered after the
+	je   3b			# beginning means early exit
+	jmp  4f 
+1:	inc  dl	
 	cmp  al, 'a'
 	jl   1f
 	sub  al, 'a'-10
@@ -131,10 +143,9 @@ move_imm:
 2:	and  al, 0x0f
 	shl  ebx, 0x04
 	add  bl, al
-	shr  ecx, 0x10
 	dec  cl
 	jne  0b
-	movd mm0, ebx		# will be restored into EAX
+4:	movd mm0, ebx		# will be restored into EAX
 	jmp  read_command
 
 # WRMSR
@@ -326,4 +337,5 @@ memacc_long:
 	jmp  read_command
 
 prompt_string:
-	.string "\r\nubrx> "	# automatically NUL terminated
+	.string "\r\ns/u/b/q> "
+	# 's'etup, 'u'pload, 'b'ranch, 'q'uit
