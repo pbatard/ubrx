@@ -30,7 +30,7 @@
 /* Constants:                                                                   */
 /********************************************************************************/
 OP_DUMP_ACC       = 0x3F	# '?'
-OP_MOVE_IMM       = 0x23	# '#'
+OP_MOVE_IMM       = 0x24	# '$'
 OP_WRMSR          = 0x2B	# '+'
 OP_RDMSR          = 0x2D	# '-'
 OP_CPUID          = 0x2A	# '*'
@@ -76,26 +76,54 @@ SIZE_LONG         = 0x02
 enter_console:
 	mov  si, offset prompt_string
 	ROM_CALL_XS print_string
+	
+major_cmd:
+	ROM_CALL read_echo
+	cmp  al, 's'		# direct hardware setup
+	je   hw_setup
+	cmp  al, 'u'		# upload to CAR/RAM through Y-modem
+#	je   ymodem_upload
+	cmp  al, 'r'		# run program in CAR/RAM
+	je   run_prog
+	cmp  al, 'q'		# quit to normal BIOS
+#	je   start_bios
+	cmp  al, 0x0a
+	je   enter_console
+	jmp  major_cmd
+	
+run_prog:
+	movd eax, mm1		# EBX = 32 bit stack pointer
+	mov  sp, ax
+	xor  ax, ax
+	shr  eax, 0x04		# convert to segment
+	mov  ss, ax
+	# test the stack
+	mov  eax, 0x55AA55AA
+	push eax
+	pop  eax
+	cmp  eax, 0x55AA55AA
+	je   0f
+	mov  ax, cs
+	mov  ss, ax
+	jmp  enter_console
+0:	movd eax, mm0		# EAX = CS:IP
+	jmp  eax
 
 # RoC (RISC on CISC)
-# We use MM0, MM1, MM2 and MM3 in lieu of EAX/EBX/ECX/EDX respectively
+# We use MM0, MM1, MM2 and MM3 in lieu of EAX, EBX, ECX, EDX respectively
+hw_setup:
+	mov al, 0x0d
+	ROM_CALL_XS putchar
+	mov al, 0x0a
+	ROM_CALL_XS putchar
 read_command:
-	xor  eax, eax
-# TODO: factorise this	
-	xor  cx, cx		# infinite timeout
-	ROM_CALL_XS readchar
-	ROM_CALL_XS putchar
-	cmp  al, 0x0d
-	jne  0f
-	mov  al, 0x0a
-	ROM_CALL_XS putchar
-#	
+#	xor  eax, eax
+	ROM_CALL read_echo
 0:	cmp  al, 0x20
 	jle  read_command	# ignore carriage returns, tabs, space, etc.
-	movd ebx, mm1		# 
-	movd ecx, mm2		# CX/DX have been modified by reachar
+	movd ebx, mm1
+	movd ecx, mm2
 	movd edx, mm3
-# TODO: do that further down
 
 # print EAX in hex
 dump_acc:
@@ -112,13 +140,7 @@ move_imm:
 	mov  cl, 0x08
 	xor  ebx, ebx
 0:	shl  ecx, 0x10
-3:	xor  cx, cx		# infinite timeout
-	ROM_CALL_XS readchar
-	ROM_CALL_XS putchar
-	cmp  al, 0x0d
-	jne  1f
-	mov  al, 0x0a
-	ROM_CALL_XS putchar	
+3:	ROM_CALL read_echo
 1:	shr  ecx, 0x10
 	cmp  al, '0'		# ignore whitespaces
 	jge  1f
@@ -181,9 +203,7 @@ cmd_cpuid:
 #        the current value of EBX will be used as SS:SP
 cmd_exit:
 	cmp  al, OP_EXIT
-	jne  acc_to_reg
-	# TODO
-	jmp  read_command
+	je   enter_console
 
 # move EAX to one of EBX, ECX, EDX, CR0
 acc_to_reg:
@@ -336,6 +356,21 @@ memacc_long:
 	mov  eax, [di]
 	jmp  read_command
 
+/********************************************************************************/
+/* Subroutines:                                                                 */
+/********************************************************************************/
+
+read_echo:
+	shl  esp, 0x10
+	xor  cx, cx		# infinite timeout
+	ROM_CALL_XS readchar
+	ROM_CALL_XS putchar
+	cmp  al, 0x0d		# CR -> CR/LF
+	jne  0f
+	mov  al, 0x0a
+	ROM_CALL_XS putchar
+0:	shr  esp, 0x10
+	jmp  sp
+
 prompt_string:
-	.string "\r\ns/u/b/q> "
-	# 's'etup, 'u'pload, 'b'ranch, 'q'uit
+	.string "s/u/r/q> "

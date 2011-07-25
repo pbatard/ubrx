@@ -805,9 +805,9 @@ ps_exit:
 print_hex:
 	PUSH_SP
 	mov  ebx, eax
-	mov  al, '0'
+	mov  al, ' '
 	ROM_CALL putchar
-	mov  al, 'x'
+	mov  al, '$'
 	ROM_CALL putchar
 	mov  cx, 8
 one_digit:
