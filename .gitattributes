@@ -2,4 +2,5 @@
 *.inc    eol=lf
 LICENSE  eol=lf
 README   eol=lf
+USAGE    eol=lf
 Makefile eol=lf

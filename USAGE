@@ -1,0 +1,99 @@
+*******************************************************************************
+*                                  UBRX USAGE                                 *
+*******************************************************************************
+
+The UBRX recovery console, in which an "s/u/r/q>" prompt is displayed, offers
+the choice of running the following 4 commands:
+
+'s' : Script/Setup mode
+'u' : program Upload (currently not implemented)
+'r' : Run current program
+'q' : Quit to normal BIOS bootup (currently not implemented)
+
+
+Script/Setup mode
+-----------------
+
+In this mode, you are offered a basic commandline interpreter, that enables 
+scripted hardware initialization, such as CAR (or possibly RAM). The goal of
+this mode is to setup your system for the upload and execution of a binary
+executable in Cache (CAR) or in RAM. Examples of such scripts for AMD and Intel
+are provided at the end of this file.
+
+Note that you can interject script commands with whitespaces or line feeds
+for readability, as these are ignored by the interpreter.
+
+The following commands are available in script mode:
+
+? - dump accumulator:
+  Display the current value of EAX in hexascii (32 bit).
+$ <hex value>  - assign immediate:
+  Assign an immediate 32 bit hexascii value to EAX. Leading zeroes can be
+  ommited.
+a/b/c/d - move accumulator to register:
+  Move the current value of EAX into CR0/EBX/ECX/EDX respectively.
+A/B/C/D - move register to accumulator:
+  Move the current value of CR0/EBX/ECX/EDX into EAX.
+p/q/r - output to port
+  Move AL(byte)/AX(word)/EAX(longword) to the port indexed by DX.
+P/Q/R - input from port
+  Move the current byte/word/longword value of the port indexex by DX to
+  AL/AX/EAX respectively.
+x/y/z - move accumulator to memory
+  Move AL(byte)/AX(word)/EAX(longword) to the 32 bit memory location indexed by
+  EDX.
+X/Y/Z - move from memory to accumulator
+  Move the byte/word/longword value of the 32 bit memory location indexed by EDX
+  into AL/AX/EAX respectively.
+# - cpuid
+  Issue the CPUID instruction. The current values of EAX will be used for the
+  index. The returned values can be accessed in EAX/EBX/ECX/EDX.
+! - invd
+  Invalidate (Flushes) internal cache
+m - write to MSR
+  Write the 64 bit value from EDX:EAX into the Model Specific Register indexed
+  by ECX.
+M - read from MSR
+  Read the 64 bit value from the Model Specific Register indexed by ECX into
+  EDX:EAX.
+. - exit script mode and return to main prompt.
+
+Remember:
+ lowercase = accumulator as source
+ UPPERCASE = accumulator as DESTINATION
+
+
+Program Upload
+--------------
+
+Transfer a binary executable into volatile memory. This uses the Y-modem serial
+transfer protocol. The memory should have been initialized first using Setup 
+mode. The last value of EAX from Setup mode is used as the base of the volatile
+memory to upload the program to.
+
+
+Run Program
+-----------
+
+Execute a binary executable in volatile memory (CAR, RAM).
+The last value of EAX from Setup mode, which should also be the base address for
+the volatile memory, will be used as entrypoint.
+The last value of EBX from Setup mode, which should point to an address into the
+volatile memory, will be used as the base for the stack.
+
+
+Quit to normal bootup
+---------------------
+
+Leave UBRX and proceed with the rest of the regular BIOS execution
+
+
+Example script of CAR initialization for Intel CPUs
+---------------------------------------------------
+
+This assumes the following initial values:
+CR0: [TODO]
+
+You should check your values using the script commands
+
+[TODO]

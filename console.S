@@ -29,23 +29,24 @@
 /********************************************************************************/
 /* Constants:                                                                   */
 /********************************************************************************/
-OP_DUMP_ACC       = 0x3F	# '?'
-OP_MOVE_IMM       = 0x24	# '$'
-OP_WRMSR          = 0x2B	# '+'
-OP_RDMSR          = 0x2D	# '-'
-OP_CPUID          = 0x2A	# '*'
-OP_EXIT           = 0x2E	# '.'
-OP_ACC_TO_REG     = 0x40	# "BCDE" [42-45]
-OP_REG_TO_ACC     = 0x60	# "bcde" [62-65]
-OP_ACC_TO_PORT    = 0x58	# "XYZ" [58-5A]
-OP_PORT_TO_ACC    = 0x78	# "xyz" [78-7A]
-OP_ACC_TO_MEM     = 0x48	# "HIJ" [48-4A]
-OP_MEM_TO_ACC     = 0x68	# "hij" [68-6A]
+OP_DUMP_ACC       = '?'
+OP_MOVE_IMM       = '$'
+OP_WRMSR          = 'm'
+OP_RDMSR          = 'M'
+OP_CPUID          = '#'
+OP_INVD           = '!'
+OP_EXIT           = '.'
+OP_ACC_TO_REG     = 'a' & 0xf8	# "abcd" [61-64]
+OP_REG_TO_ACC     = 'A' & 0xf8	# "ABCD" [41-44]
+OP_ACC_TO_PORT    = 'p'		# "pqr" [70-72]
+OP_PORT_TO_ACC    = 'P'		# "PQR" [50-52]
+OP_ACC_TO_MEM     = 'x'		# "xyz" [78-7A]
+OP_MEM_TO_ACC     = 'X'		# "XYZ" [58-5A]
 
-REG_EBX           = 0x02
-REG_ECX           = 0x03
-REG_EDX           = 0x04
-REG_CR0           = 0x05
+REG_CR0           = 'a' & 0x07
+REG_EBX           = 'b' & 0x07
+REG_ECX           = 'c' & 0x07
+REG_EDX           = 'd' & 0x07
 
 SIZE_BYTE         = 0x00
 SIZE_WORD         = 0x01
@@ -74,6 +75,12 @@ SIZE_LONG         = 0x02
 .section console, "ax"
 .globl enter_console
 enter_console:
+# TODO: move current SIO base, type, LDN and COM base to mmx regs?
+	pxor mm0, mm0
+	pxor mm1, mm1
+	pxor mm2, mm2
+	pxor mm3, mm3
+display_prompt:
 	mov  si, offset prompt_string
 	ROM_CALL_XS print_string
 	
@@ -88,7 +95,7 @@ major_cmd:
 	cmp  al, 'q'		# quit to normal BIOS
 #	je   start_bios
 	cmp  al, 0x0a
-	je   enter_console
+	je   display_prompt
 	jmp  major_cmd
 	
 run_prog:
@@ -100,14 +107,21 @@ run_prog:
 	# test the stack
 	mov  eax, 0x55AA55AA
 	push eax
-	pop  eax
-	cmp  eax, 0x55AA55AA
+	push eax
+	push eax
+	push eax
+	pop  ebx
+	pop  ebx
+	pop  ebx
+	pop  ebx
+	cmp  eax, ebx
 	je   0f
 	mov  ax, cs
 	mov  ss, ax
-	jmp  enter_console
+	jmp  display_prompt
 0:	movd eax, mm0		# EAX = CS:IP
-	jmp  eax
+	call eax
+	jmp  display_prompt
 
 # RoC (RISC on CISC)
 # We use MM0, MM1, MM2 and MM3 in lieu of EAX, EBX, ECX, EDX respectively
@@ -117,7 +131,6 @@ hw_setup:
 	mov al, 0x0a
 	ROM_CALL_XS putchar
 read_command:
-#	xor  eax, eax
 	ROM_CALL read_echo
 0:	cmp  al, 0x20
 	jle  read_command	# ignore carriage returns, tabs, space, etc.
@@ -136,7 +149,7 @@ dump_acc:
 # move 32 bit immediate value to EAX
 move_imm:
 	cmp  al, OP_MOVE_IMM
-	jne  cmd_wrmsr
+	jne  cmd_invd
 	mov  cl, 0x08
 	xor  ebx, ebx
 0:	shl  ecx, 0x10
@@ -156,18 +169,20 @@ move_imm:
 	jl   1f
 	sub  al, 'A'-10
 	jmp  2f
-1:	cmp  al, '9'
-	jg   1f
-	sub  al, '0'
-	jmp  2f
-1:	mov  ebx, 0xffffffff
-	jmp  read_command
+1:	sub  al, '0'		# no garbage detection
 2:	and  al, 0x0f
 	shl  ebx, 0x04
 	add  bl, al
 	dec  cl
 	jne  0b
 4:	movd mm0, ebx		# will be restored into EAX
+	jmp  read_command
+
+# INVD
+cmd_invd:
+	cmp  al, OP_INVD
+	jne  cmd_wrmsr
+	invd
 	jmp  read_command
 
 # WRMSR
@@ -199,11 +214,12 @@ cmd_cpuid:
 	movd mm3, edx
 	jmp  read_command
 
+
 # EXIT - the current value of EAX will be used as RAM/CAR base (CS:IP)
 #        the current value of EBX will be used as SS:SP
 cmd_exit:
 	cmp  al, OP_EXIT
-	je   enter_console
+	je   display_prompt
 
 # move EAX to one of EBX, ECX, EDX, CR0
 acc_to_reg:
@@ -216,23 +232,23 @@ acc_to_ebx:
 	cmp  al, REG_EBX
 	jne  acc_to_ecx
 	movq mm1, mm0
-	jmp  read_command
+	jmp  0f
 acc_to_ecx:
 	cmp  al, REG_ECX
 	jne  acc_to_edx
 	movq mm2, mm0
-	jmp  read_command
+	jmp  0f
 acc_to_edx:
 	cmp  al, REG_EDX
 	jne  acc_to_cr0
 	movq mm3, mm0
-	jmp  read_command
+	jmp  0f
 acc_to_cr0:
 	cmp  al, REG_CR0
-	jne  read_command
+	jne  0f
 	movd eax, mm0
 	mov  cr0, eax
-	jmp  read_command
+0:	jmp  read_command
 
 # move one of EBX, ECX, EDX, CR0 to EAX
 reg_to_acc:
@@ -242,22 +258,23 @@ ebx_to_acc:
 	cmp  al, REG_EBX
 	jne  ecx_to_acc
 	movq mm0, mm1
-	jmp  read_command
+	jmp  0f
 ecx_to_acc:
 	cmp  al, REG_ECX
 	jne  edx_to_acc
 	movq mm0, mm2
-	jmp  read_command
+	jmp  0f
 edx_to_acc:
 	cmp  al, REG_EDX
 	jne  cr0_to_acc
 	movq mm0, mm3
-	jmp  read_command
+	jmp  0f
 cr0_to_acc:
 	cmp  al, REG_CR0
-	jne  read_command
+	jne  0f
 	mov  eax, cr0
 	movd mm0, eax
+0:	jmp  read_command
 
 # Output AL/AX/EAX to the port indexed by DX
 acc_to_port:
@@ -270,17 +287,17 @@ out_byte:
 	cmp  bl, SIZE_BYTE
 	jne  out_word
 	out  dx, al
-	jmp  read_command
+	jmp  0f
 out_word:
 	cmp  bl, SIZE_WORD
 	jne  out_long
 	out  dx, ax
-	jmp  read_command
+	jmp  0f
 out_long:
 	cmp  bl, SIZE_LONG
-	jne  read_command
+	jne  0f
 	out  dx, eax
-	jmp  read_command	
+0:	jmp  read_command	
 
 # Input the port indexed by DX to AL/AX/EAX
 port_to_acc:
@@ -319,22 +336,22 @@ accmem_byte:
 	cmp  bl, SIZE_BYTE
 	jne  accmem_word
 	mov  [di], al
-	jmp  read_command
+	jmp  0f
 accmem_word:
 	cmp  bl, SIZE_WORD
 	jne  accmem_long
 	mov  [di], ax
-	jmp  read_command
+	jmp  0f
 accmem_long:
 	cmp  bl, SIZE_LONG
-	jne  read_command
+	jne  0f
 	mov  [di], eax
-	jmp  read_command
+0:	jmp  read_command
 
 # Move the content of the memory address pointed by EDX into AL/AX/EAX
 mem_to_acc:
 	cmp  ah, OP_MEM_TO_ACC
-	jne  read_command
+	jne  0f
 	movd eax, mm3
 	mov  di, ax
 	xor  ax, ax
@@ -344,17 +361,17 @@ memacc_byte:
 	cmp  bl, SIZE_BYTE
 	jne  memacc_word
 	mov  al, [di]
-	jmp  read_command
+	jmp  0f
 memacc_word:
 	cmp  bl, SIZE_WORD
 	jne  memacc_long
 	mov  ax, [di]
-	jmp  read_command
+	jmp  0f
 memacc_long:
 	cmp  bl, SIZE_LONG
-	jne  read_command
+	jne  0f
 	mov  eax, [di]
-	jmp  read_command
+0:	jmp  read_command
 
 /********************************************************************************/
 /* Subroutines:                                                                 */

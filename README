@@ -30,35 +30,24 @@ relying on an UBRX enabled BIOS.
 Current Status
 --------------
 
-UBRX is currently a *PROOF OF CONCEPT*.
+UBRX is currently alpha software.
 
-The current aim is to demonstrate that creating a universal x86 'panic mode'
-bootblock is achievable, by demoing chipset detection and serial console.
-
-At this stage to actually be useful, UBRX is missing critical parts such as CAR
-(Cache As RAM) initialization as well as Y-modem upload for the running of
-executables in cache (to initialize the RAM, add a debugger, reflash the BIOS or
-simply test chipset features for BIOS development).
-
-Even so, our implementation leads us to believe that generic UART detection as
-well as a feature complete recovery console can be achieved in a 8 KB bootblock.
-The current SuperIO/UART detection part takes les than 2 KB (which could be
-optimized further) which should leave at least 6 KB for a generic CAR + Y-Modem
-implementation.
+At this stage to be fully useful, UBRX is missing parts such as CAR (Cache As
+RAM) script initialization examples as as well as Y-modem upload.
 
 
 Limitations
 -----------
 
 Because of the diversity and history of the x86 PC platform, it should be fairly
-obvious that there exists some restrictions with regards to the "universal"
+obvious that there exists some restrictions with regards to our "universal"
 qualifier. They are currently as follow:
 
 * The motherboard must have a physical serial port, provided by a Super I/O chip.
-  Console over USB-RS232 adapters is not supported.
-* Only AMD and Intel x86 CPUs are supported.
+  Console over USB-RS232 adapters or legacy-free hardware is not supported.
+* Only AMD and Intel x86 CPUs are supported for the time being.
 * The CPU must support the MMX instruction set (Intel Pentium MMX or
-  later, AMD K6 or later - this is because we use MMX stack operations).
+  later, AMD K6 or later). This is because we use MMX for stack operations.
 * Only Super I/O chipsets conforming to the ISA PnP specifications, and
   starting in PnP mode on reset are supported (except if VMware compatible)
 * Some non widespread PnP Super I/O chips with complex config mode (eg. IT8671)
@@ -72,7 +61,7 @@ qualifier. They are currently as follow:
 The limitations above are unlikely to be much of an impact, unless you have a
 an old system. Moreover, these limitations are mostly a result of a design
 choice (or lack of datasheets in the case of nVidia chipset support), and can
-be addressed in a non POC version of UBRX if needed.
+be addressed in future versions of UBRX.
 
 
 Build Instructions
@@ -112,13 +101,20 @@ Testing
 
 Once UBRX has been flashed onto your BIOS chip, you should connect one of its
 serial port to another computer with a Null Modem cable, open a console (115200
-bauds, 8N1, no hardware handshaking) and then power up the machine with the UBRX
-BIOS while pressing the Space Bar in the console window.
-You should then end up with an 'ubrx>' prompt and a serial repeater.
+bauds, 8N1, no handshaking) and then power up the machine with the UBRX BIOS
+while pressing the Space Bar in the console window.
+If detection of the serial port was succesful, you should end up with a prompt
+where recovery commands are available.
 
 Since UBRX can easily be tested on VMware, we encourage first running a test
 there, before trying on real hardware. For more information on VMware testing
 you can check http://pete.akeo.ie/2011/06/crafting-bios-from-scratch.html.
+
+
+Usage
+-----
+
+See the USAGE text file
 
 
 Detection primer
@@ -206,4 +202,3 @@ Only once we have successfully identified a 16650 UART do we attempt to fully
 configure it and read the console request key. If multiple UARTs have been
 identified, these will be checked in sequence, meaning that any serial port
 available on the motherboard can be used for console access.
- 
