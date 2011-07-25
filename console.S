@@ -104,7 +104,7 @@ run_prog:
 	xor  ax, ax
 	shr  eax, 0x04		# convert to segment
 	mov  ss, ax
-	# test the stack
+	# perform stack test
 	mov  eax, 0x55AA55AA
 	push eax
 	push eax
@@ -115,12 +115,11 @@ run_prog:
 	pop  ebx
 	pop  ebx
 	cmp  eax, ebx
-	je   0f
-	mov  ax, cs
-	mov  ss, ax
-	jmp  display_prompt
-0:	movd eax, mm0		# EAX = CS:IP
+	jne  0f
+	movd eax, mm0		# EAX = CS:IP
 	call eax
+0:	mov  ax, cs
+	mov  ss, ax
 	jmp  display_prompt
 
 # RoC (RISC on CISC)

@@ -106,9 +106,6 @@ p5b: 1m
 
 %.o: %.S Makefile mmx_stack.inc
 	@echo "[AS]  $<"
-	@# Naked PUSH/POP should not be used - make sure we detect that
-	@! fgrep -ny "push " $< || echo "PUSH operation detected - did you mean PUSHX?"
-	@! fgrep -ny "pop " $< || echo "POP operation detected - did you mean POPX?"
 	@$(ASM) -c -o $*.o $(CFLAGS) $<
 
 # Produce a disassembly dump of the main section, for verification purposes
