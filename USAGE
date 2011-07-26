@@ -29,7 +29,7 @@ The following commands are available in script mode:
   Display the current value of EAX in hexascii (32 bit).
 $ <hex value>  - assign immediate:
   Assign an immediate 32 bit hexascii value to EAX. Leading zeroes can be
-  ommited.
+  ommitted.
 a/b/c/d - move accumulator to register:
   Move the current value of EAX into CR0/EBX/ECX/EDX respectively.
 A/B/C/D - move register to accumulator:
@@ -37,7 +37,7 @@ A/B/C/D - move register to accumulator:
 p/q/r - output to port
   Move AL(byte)/AX(word)/EAX(longword) to the port indexed by DX.
 P/Q/R - input from port
-  Move the current byte/word/longword value of the port indexex by DX to
+  Move the current byte/word/longword value of the port indexed by DX to
   AL/AX/EAX respectively.
 x/y/z - move accumulator to memory
   Move AL(byte)/AX(word)/EAX(longword) to the 32 bit memory location indexed by
@@ -49,7 +49,7 @@ X/Y/Z - move from memory to accumulator
   Issue the CPUID instruction. The current values of EAX will be used for the
   index. The returned values can be accessed in EAX/EBX/ECX/EDX.
 ! - invd
-  Invalidate (Flushes) internal cache
+  Invalidate (flush) internal cache
 m - write to MSR
   Write the 64 bit value from EDX:EAX into the Model Specific Register indexed
   by ECX.
