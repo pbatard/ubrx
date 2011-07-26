@@ -117,7 +117,7 @@ _jmptest:
 	@echo ".igot 0 : { *(.igot.plt) } }" >> $@.ld
 	@$(LD) $(LDFLAGS) -T$@.ld -o $@.out $@.o
 	@$(OBJCOPY) -O binary -j .main $@.out $@.bin
-	@`cmp -s $@.bin $@.good;echo "$$?" > $@`
+	@`cmp -s -n7 $@.bin $@.good;echo "$$?" > $@`
 
 # Produce a disassembly dump of the main section, for verification purposes
 dis: $(TARGET).out
