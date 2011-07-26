@@ -58,7 +58,7 @@ endif
 all: $(TARGET).rom
 
 clean:
-	@-rm -f -v *.o *.ld *.layout *.out *.bin _jmptest $(MEMLAYOUT)
+	@-rm -f -v *.o *.ld *.layout *.out *.bin $(MEMLAYOUT)
 
 # Common flash sizes. Note that we can't use $@ in the target-specific variable
 # line as ROM_SIZE would be evaluated to the target at hand when reused.

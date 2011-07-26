@@ -171,7 +171,6 @@ AMD_SB_PM_DATA   = 0xCD7
 # Fixes a binutil/ld bug where the address if off by 2 on cross section jumps
 .macro  JMP_XS addr
 .if JMP_WORKAROUND
-.print "using JMP workaround"
 	jmp  \addr + 2
 .else
 	jmp  \addr
