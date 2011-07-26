@@ -58,7 +58,7 @@ endif
 all: $(TARGET).rom
 
 clean:
-	@-rm -f -v *.o *.ld *.layout $(TARGET).out $(MEMLAYOUT)
+	@-rm -f -v *.o *.ld *.layout *.out *.bin _jmptest $(MEMLAYOUT)
 
 # Common flash sizes. Note that we can't use $@ in the target-specific variable
 # line as ROM_SIZE would be evaluated to the target at hand when reused.
@@ -100,13 +100,24 @@ erase:
 p5b: 1m
 	flashrom -p ft2232_spi:type=arm-usb-tiny -l 1m.layout -i bootblock -n -w $(TARGET).rom
 
-%.o: %.c Makefile
+%.o: %.c Makefile _jmptest
 	@echo "[CC]  $@"
 	@$(CC) -c -o $*.o $(CFLAGS) $<
 
-%.o: %.S Makefile mmx_stack.inc
+%.o: %.S Makefile mmx_stack.inc _jmptest
 	@echo "[AS]  $<"
-	@$(ASM) -c -o $*.o $(CFLAGS) $<
+	@$(ASM) -D JMP_WORKAROUND=`cat _jmptest` -c -o $*.o $(CFLAGS) $<
+
+# Depending on the platform and binutil version, short jumps between labels
+# from different sections may have an unwanted 2 byte offset - fix that
+_jmptest:
+	@$(CC) -c -o $@.o $(CFLAGS) $@.S
+	@echo "OUTPUT_ARCH(i8086) SECTIONS { ENTRY(s2)" > $@.ld
+	@echo ".main : { *(section1) *(section2) }" >> $@.ld
+	@echo ".igot 0 : { *(.igot.plt) } }" >> $@.ld
+	@$(LD) $(LDFLAGS) -T$@.ld -o $@.out $@.o
+	@$(OBJCOPY) -O binary -j .main $@.out $@.bin
+	@`cmp -s $@.bin $@.good;echo "$$?" > $@`
 
 # Produce a disassembly dump of the main section, for verification purposes
 dis: $(TARGET).out

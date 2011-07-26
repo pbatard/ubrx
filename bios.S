@@ -170,7 +170,12 @@ AMD_SB_PM_DATA   = 0xCD7
 
 # Fixes a binutil/ld bug where the address if off by 2 on cross section jumps
 .macro  JMP_XS addr
+.if JMP_WORKAROUND
+.print "using JMP workaround"
 	jmp  \addr + 2
+.else
+	jmp  \addr
+.endif
 .endm
 
 # Read current super I/O base from data section (global pointer in MM0)
@@ -257,7 +262,7 @@ AMD_SB_PM_DATA   = 0xCD7
 /* This allows the .rom binary to be filled to the right size with objcopy.     */
 /********************************************************************************/
 .section begin, "a"			# The 'ALLOC' flag is needed for objcopy
-	.ascii "UBRX v0.1"
+	.ascii "UBRX v0.2"
 	.align 16, 0xff
 /********************************************************************************/
 
