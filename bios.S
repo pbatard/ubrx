@@ -56,7 +56,7 @@ PERFORM_MSR_TEST = 0	# Set to nonzero if you want to have MSR test performed as
 			# part of the 16550 UART checks. 
 			# If you use VMware and direct serial to a file, you
 			# should disable this test.
-FORCE_PANIC      = 1	# Force panic mode on the first valid UART found without
+FORCE_PANIC      = 0	# Force panic mode on the first valid UART found without
 			# waiting for panic key (for testing only)
 MAX_LDN          = 0x20	# Maximum number of LDNs we test for UART functionality
 USE_IO_DELAY     = 1	# Add a few idle cycles between in/out operations in close
@@ -74,8 +74,10 @@ TEST_EXTRA_PORTS = 1	# Test additional Super I/O ports beside 0x2E & 0x4E
 
 # AMD SB8x0 extra build options (TODO: conditional SB800 detection)
 SB800_48MHZ_INIT = 0	# Set to 1 to force 48 MHz clock init of AMD SB8x0 SouthBridge
+SB900_48MHZ_INIT = 0	# Set to 1 to force 48 MHz clock init of AMD SB9x0 SouthBridge
+			# SB800 needs to be enabled
 			# NOTE: ONLY DO SO IF YOU KNOW WHAT YOU ARE DOING
-SB800_MMIO_PAGE  = 0x8000	# Page to map SB8x0 MMIO 
+SB800_MMIO_PAGE  = 0x8000	# Page to map SB8x0/SB9x0 MMIO 
 
 
 /********************************************************************************/
@@ -408,6 +410,8 @@ test_ldn:
 
 	# Passed the 2 extra safety test => proceed with full Super I/O and panic test
 	PUSHX cl
+	dec  dx
+	ROM_CALL xt_init	# Some PnP chips require extra init
 	ROM_CALL check_pnp_superio
 	POPX cl
 	mov  ah, al		# keep a copy of our return value in AH
@@ -523,7 +527,7 @@ vm_restore:
 
 enter_panic:
 	DIAG 0x80
-	jmp  enter_console
+	JMP_XS enter_console
 
 # TODO: proceed to booting normal BIOS
 halt:
@@ -590,19 +594,26 @@ lpc_amd:
 	out  dx, al
 	inc  dx
 	in   al, dx
-	or   al, 0x01			# enable AcpiMMio space
-	and  al, 0xfd			# disable I/O-mapped space, use Memory-mapped instead
+	or   al,  (1 << 0)		# enable AcpiMMio space
+	and  al, ~(1 << 1)		# disable I/O-mapped space, use Memory-mapped instead
 	out  dx, al
 	
 	mov  ax, SB800_MMIO_PAGE	# Set our base page
-	mov  es, ax
+	mov  es, ax			# ES does not need to be restored
 	mov  di, 0xe00 + 0x40		# Misc. Registers: MiscClkCntrl
 	mov  al, [di]
 	and  al, 0xf8
 	or   al, 0x02			# Enable and set Device_CLK1 (Super I/O) to 48 Mhz
 	mov  [di], al
-#	mov  ax, es			# restore ds
-#	mov  es, ax
+# TODO: SB900 vs SB800 detection
+.if SB900_48MHZ_INIT
+ 	# Program ClkDrvSth2 OSCOUT1_CLK_sel for 48 MHz (default is 14 MHz)
+	mov  di, 0xe00 + 0x28
+	mov  eax, [di]
+	and  eax, ~(7 << 16)
+	or   eax,  (2 << 16)
+	mov  [di], eax
+.endif
 .endif
 	jmp  sp
 lpc_intel:
@@ -827,6 +838,62 @@ alpha:
 	ROM_CALL putchar
 	mov  eax, ebx
 	POP_SP
+	jmp  sp
+
+# MODIFIES: AX, EBX, CX, DX, SI
+# Peforms extra initialization for PnP Super I/Os that require it
+# IN: DX = Super I/O base
+# OUT: none
+xt_init:
+	DIAG 0x76
+	mov  al, PNP_ID
+	out  dx, al
+	IO_DELAY
+	inc  dx
+	in   al, dx
+	shl  ax, 0x08
+	dec  dx
+	mov  al, PNP_ID+1
+	out  dx, al
+	IO_DELAY
+	inc  dx
+	in   al, dx
+	mov  cx, ax		# CX  = 2 byte chip ID
+	mov  si, offset special_init
+xti_chip:
+	mov  ebx, [si]		# read both the mask and ID at once
+	add  si, 4
+	mov  ax, cx
+	and  ax, bx		# apply mask
+	shr  ebx, 0x10
+	cmp  ax, bx		# compare with ID
+	je   xti_match
+0:	add  si, 3		# skip data section
+	mov  al, [si]
+	cmp  al, 0xff		# end of section marker
+	jne  0b
+	inc  si
+	cmp  si, offset special_init_end
+	jne  xti_chip
+	jmp  sp
+xti_match:
+	DIAG 0x77
+	mov  al, [si]
+	dec  dx
+	out  dx, al
+	inc  dx
+	inc  si
+	mov  ah, [si]
+	inc  si
+	in   al, dx
+	and  al, ah
+	mov  ah, [si]
+	inc  si
+	or   al, ah
+	out  dx, al
+	mov  al, [si]
+	cmp  al, 0xff
+	jne  xti_match
 	jmp  sp
 
 # MODIFIES: EAX, EBX, ECX, EDX
@@ -1172,6 +1239,29 @@ serial_conf:			# See http://www.versalogic.com/kb/KB.asp?KBID=1395
 	.byte COM_LCR, 0x03	# Unset DLAB. Set 8N1 mode
 	.byte COM_FCR, 0x07	# Enable & reset FIFOs. DMA mode 0.
 serial_conf_end:
+# Extra configuration for PnP chip that require it
+special_init:
+#	.word 0xffff		# PnP chip ID mask
+#	.word 0x1234		# PnP chip ID (big endian format: [0x20][0x21])
+#	.byte 0x12		# PnP register index
+#	.byte 0x7f		# AND mask to apply (clear bits - here, clear bit 7)
+#	.byte 0x01		# OR value to apply (set bits - here, set bit 0)
+#	.byte 0xff		# end of section
+	# The Nuvoton NCT6776F defaults with Serial A & B disabled => enable them
+	.word 0xffff
+	.word 0xc333		# NCT6776F chip ID
+	.byte 0x2a		# Multi Function Selection register
+	.byte 0x1f		# bit 7, 6 & 5 cleared => Serial A & B enabled
+	.byte 0x00
+	.byte 0xff		# end of section
+	# WinBond W83977TF (testing)
+	.word 0xffff
+	.word 0x9773		# W83977TF chip ID
+	.byte 0x25		# Conf Register 25
+	.byte 0xff
+	.byte 0x01		# FDCTRI
+	.byte 0xff
+special_init_end:
 /********************************************************************************/
 
 
