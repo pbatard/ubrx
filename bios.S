@@ -1261,9 +1261,9 @@ special_init:
 	# WinBond W83977TF (testing)
 	.word 0xffff
 	.word 0x9773		# W83977TF chip ID
-	.byte 0x25		# Conf Register 25
-	.byte 0xff
-	.byte 0x01		# FDCTRI
+	.byte 0x22		# Conf Register 25
+	.byte 0xfe		# Power Down FDC
+	.byte 0x30		# Power Up UART A&B
 	.byte 0xff
 special_init_end:
 /********************************************************************************/
