@@ -72,11 +72,10 @@ TEST_EXTRA_PORTS = 1	# Test additional Super I/O ports beside 0x2E & 0x4E
 #SUPERIO_TYPE     = 2	# 0 = NS, 1 = SMSC, 2 = VIA/Winbond/Nuvoton/Fintek,
 			# 3 = Intel, 4 = ITE
 
-# AMD SB8x0 extra build options (TODO: conditional SB800 detection)
+# AMD SBxx0 extra build options (TODO: conditional SB detection)
 SB800_48MHZ_INIT = 0	# Set to 1 to force 48 MHz clock init of AMD SB8x0 SouthBridge
 SB900_48MHZ_INIT = 0	# Set to 1 to force 48 MHz clock init of AMD SB9x0 SouthBridge
-			# SB800 needs to be enabled
-			# NOTE: ONLY DO SO IF YOU KNOW WHAT YOU ARE DOING
+			# NOTE: ONLY USE THE ABOVE IF YOU KNOW WHAT YOU ARE DOING
 SB800_MMIO_PAGE  = 0x8000	# Page to map SB8x0/SB9x0 MMIO 
 
 
@@ -564,7 +563,7 @@ lpc_amd:
 	PCI_CONF_OUT32 0, 0x14, 3, 0x44, AMD_SB_IO
 	PCI_CONF_OUT32 0, 0x14, 3, 0x48, 0x0000ff03	# 0x2E/0x4E forwarding, everything else disabled
 
-.if SB800_48MHZ_INIT	# Force SB8x0 48 MHz on clk1 (DOES NOT CHECK FOR SB8x0!)
+.if SB800_48MHZ_INIT | SB900_48MHZ_INIT	# Force 48 MHz clock init (/!\ DOES NOT CHECK FOR VALID SB)
 	# We have the choice of switching to 32 bit, to use the MMIO default base of 0xFED80000
 	# or change this base to a 20 bit address (real-mode). We choose the latter
 	mov  dx, AMD_SB_PM_ADDR
@@ -1245,11 +1244,12 @@ serial_conf:			# See http://www.versalogic.com/kb/KB.asp?KBID=1395
 serial_conf_end:
 # Extra configuration for PnP chip that require it
 special_init:
+	# WinBond W83977TF (testing)
 #	.word 0xffff		# PnP chip ID mask
-#	.word 0x1234		# PnP chip ID (big endian format: [0x20][0x21])
-#	.byte 0x12		# PnP register index
-#	.byte 0x7f		# AND mask to apply (clear bits - here, clear bit 7)
-#	.byte 0x01		# OR value to apply (set bits - here, set bit 0)
+#	.word 0x9773		# PnP chip ID (big endian format: [0x20][0x21])
+#	.byte 0x22		# PnP register index
+#	.byte 0xfe		# AND mask to apply (clear bits - here, clear bit 0)
+#	.byte 0x30		# OR value to apply (set bits - here, set bits 4&5)
 #	.byte 0xff		# end of section
 	# The Nuvoton NCT6776F defaults with Serial A & B disabled => enable them
 	.word 0xffff
@@ -1258,13 +1258,6 @@ special_init:
 	.byte 0x1f		# bit 7, 6 & 5 cleared => Serial A & B enabled
 	.byte 0x00
 	.byte 0xff		# end of section
-	# WinBond W83977TF (testing)
-	.word 0xffff
-	.word 0x9773		# W83977TF chip ID
-	.byte 0x22		# Conf Register 25
-	.byte 0xfe		# Power Down FDC
-	.byte 0x30		# Power Up UART A&B
-	.byte 0xff
 special_init_end:
 /********************************************************************************/
 
