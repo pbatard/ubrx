@@ -101,7 +101,7 @@ erase:
 p5b: 1m
 	flashrom -p ft2232_spi:type=arm-usb-tiny -l 1m.layout -i bootblock -n -w $(TARGET).rom
 
-%.o: %.c Makefile _jmptest
+%.o: %.c Makefile
 	@echo "[CC]  $@"
 	@$(CC) -c -o $*.o $(CFLAGS) $<
 
