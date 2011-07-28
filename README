@@ -92,8 +92,8 @@ MUST have means to restore your BIOS, with an external programmer, before you
 attempt to flash an UBRX one.
 
 Please consult the Makefile to find out how you can also invoke the building
-and flashing of target specific UBRX BIOS ROMs. Build options can be modified,
-and are also documented at the top of the bios.S source.
+and flashing of target specific UBRX BIOS ROMs.
+Build options can be modified in "config.inc".
 
 
 Testing

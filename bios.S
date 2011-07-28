@@ -18,7 +18,6 @@
 /*                                                                              */
 /********************************************************************************/
 
-.include "mmx_stack.inc"
 
 /********************************************************************************/
 /* GNU Assembler Settings:                                                      */
@@ -26,6 +25,12 @@
 .intel_syntax noprefix	# Use Intel assembler syntax (same as IDA Pro)
 .code16			# After reset, the x86 CPU is in real/16 bit mode
 /********************************************************************************/
+
+.include "config.inc"
+# Can't use external defined macros into an include... :(
+JMP_WORKAROUND_INC = JMP_WORKAROUND
+.include "macros.inc"	# Always make sure config is included before macros
+.include "mmx_stack.inc"
 
 
 /********************************************************************************/
@@ -39,45 +44,6 @@
 /* EBP = used for POPXD operations to preserve the content of extended register */
 /* If there's any register you don't want to be modified during a call, it is   */
 /* your responsibility to PUSHX/POPX them                                       */
-
-
-/********************************************************************************/
-/* Build variables:                                                             */
-/********************************************************************************/
-COM_BASE         = 0x3F8  # See further down for valid I/O values
-BAUDRATE_DIVISOR = 0x0002 #  4800 = 0x0018,  9600 = 0x000C,  19200 = 0x0006,
-                          # 38400 = 0x0003, 57600 = 0x0002, 115200 = 0x0001
-                          # We default to 57600, as 115200 can lead to FIFO
-                          # overflow for code executed on a 150ns read access flash
-PANIC_KEY        = ' '  # Key to press to enter panic mode (default: <SPACE>)
-PANIC_COUNT      = 5    # Number of times the key must be read to access panic mode
-VMWARE_SUPPORT   = 1	# Include support for VMware platform. 
-			# This is considered safe to keep, even if you don't use 
-			# VMware, and may also lead to the console being accessible
-			# even if Super I/O detection failed, if your chip resets
-			# with COM1 enabled.
-PERFORM_MSR_TEST = 0	# Set to nonzero if you want to have MSR test performed as
-			# part of the 16550 UART checks. 
-			# If you use VMware and direct serial to a file, you
-			# should disable this test.
-FORCE_PANIC      = 0	# Force panic mode on the first valid UART found without
-			# waiting for panic key (for testing only)
-MAX_LDN          = 0x20	# Maximum number of LDNs we test for UART functionality
-USE_DIAGNOSTIC   = 1	# Send POST codes to a BIOS diagnostics card
-TEST_EXTRA_PORTS = 1	# Test additional Super I/O ports beside 0x2E & 0x4E
-
-# If you want to bypass (some of) the autodetection, and know your Super I/O base
-# as well as the LDN of the UART, you can provide them below:
-#SUPERIO_BASE     = 0x2e	# Super I/O base address
-#SUPERIO_UART_LDN = 3	# LDN of the UART to use
-#SUPERIO_TYPE     = 2	# 0 = NS, 1 = SMSC, 2 = VIA/Winbond/Nuvoton/Fintek,
-			# 3 = Intel, 4 = ITE
-
-# AMD SBxx0 extra build options (TODO: conditional SB detection)
-SB800_48MHZ_INIT = 0	# Set to 1 to force 48 MHz clock init of AMD SB8x0 SouthBridge
-SB900_48MHZ_INIT = 0	# Set to 1 to force 48 MHz clock init of AMD SB9x0 SouthBridge
-			# NOTE: ONLY USE THE ABOVE IF YOU KNOW WHAT YOU ARE DOING
-SB800_MMIO_PAGE  = 0x8000	# Page to map SB8x0/SB9x0 MMIO 
 
 
 /********************************************************************************/
@@ -156,99 +122,6 @@ AMD_SB_PM_DATA   = 0xCD7
   .print "Invalid COM_BASE"
   .abort
 .endif
-
-
-/********************************************************************************/
-
-
-/********************************************************************************/
-/* Macros:                                                                      */
-/********************************************************************************/
-
-# Jump to a subroutine
-.macro  ROM_CALL addr
-	mov  sp, offset 9f	# Use a local label as we don't know the size
-	jmp  \addr		# of the jmp instruction (can be 2 or 3 bytes)
-9:	# see http://sourceware.org/binutils/docs-2.21/as/Symbol-Names.html
-.endm
-
-# Fixes a binutil/ld bug where the address is off by 2 on cross section jumps
-.macro  JMP_XS addr
-.if JMP_WORKAROUND
-	jmp  \addr + 2
-.else
-	jmp  \addr
-.endif
-.endm
-
-# Read current super I/O base from data section (global pointer in MM0)
-.macro  GET_SUPERIO_BASE
-.ifdef SUPERIO_BASE
-	mov  dx, SUPERIO_BASE
-.else
-	movd edi, mm0
-	mov  dx, [di]
-.endif
-.endm
-
-# Issue a POST code to an optional diagnostic card. Modifies AL.
-.macro DIAG value
-.if USE_DIAGNOSTIC
-  .ifnes "\value", "al"
-	mov  al, \value
-  .endif
-	out  0x80, al
-.endif
-.endm
-
-# PCI helpers
-.macro PCI_CONF_ADDROUT bus, device, function, address
-.if \address & 0x03
-.print "PCI config address must be 32 bit aligned"
-.abort
-.endif
-	mov eax, 0x80000000 | (\bus << 24) | (\device << 11) | (\function << 8) | \address
-	mov dx, PCI_ADDR
-	out dx, eax
-.endm
-.macro PCI_CONF_IN32 bus, device, function, address
-	PCI_CONF_ADDROUT \bus, \device, \function, \address
-	mov dx, PCI_DATA
-	in  eax, dx
-.endm
-.macro PCI_CONF_OUT32 bus, device, function, address, data
-	PCI_CONF_ADDROUT \bus, \device, \function, \address
-	mov dx, PCI_DATA
-  .ifnes "\value", "eax"
-	mov eax, \data
-  .endif
-	out dx, eax
-.endm
-
-# If using the calls below from a subroutine, remember to stack SP
-
-# Write 'data' to to the PnP Super I/O register 'reg_index'
-.macro  PNP_OUT reg_index, data
-.ifeqs "\reg_index", "ah"
-.print "Cannot use AH as register index in macro PNP_OUT"
-.abort
-.endif
-.ifnes "\reg_index", "al"
-	mov  al, \reg_index
-.endif
-.ifnes "\data", "ah"
-	mov  ah, \data
-.endif
-	ROM_CALL superio_out
-.endm
-
-# Read data from the PnP Super I/O register 'reg_index'
-.macro  PNP_IN reg_index
-.ifnes "\reg_index", "al"
-	mov  al, \reg_index
-.endif
-	ROM_CALL superio_in
-.endm
 
 
 /********************************************************************************/
