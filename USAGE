@@ -27,9 +27,13 @@ The following commands are available in script mode:
 
 ? - dump accumulator:
   Display the current value of EAX in hexascii (32 bit).
-$ <hex value>  - assign immediate:
+$ <hex value> - assign immediate:
   Assign an immediate 32 bit hexascii value to EAX. Leading zeroes can be
   ommitted.
+/ - change baudrate:
+  Change the 16550 baud rate divisor using the current value of AX.
+  Standard divisor values are 0x000C for 9600 bauds, 0x0006 for 19200,
+  0x0002 for 57600 and 0x0001 for 115200.
 a/b/c/d - move accumulator to register:
   Move the current value of EAX into CR0/EBX/ECX/EDX respectively.
 A/B/C/D - move register to accumulator:
@@ -97,3 +101,4 @@ CR0: [TODO]
 You should check your values using the script commands
 
 [TODO]
+

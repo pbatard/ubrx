@@ -26,11 +26,17 @@
 .code16			# After reset, the x86 CPU is in real/16 bit mode
 /********************************************************************************/
 
+COM_BASE         = 0x3F8
+COM_DLL          = 0x00	# Baud Rate Divisor LSB (if DLAB is set)
+COM_DLM          = 0x01	# Baud Rate Divisor MSB (if DLAB is set)
+COM_LCR          = 0x03	# Line Control Register
+
 /********************************************************************************/
 /* Constants:                                                                   */
 /********************************************************************************/
 OP_DUMP_ACC       = '?'
 OP_MOVE_IMM       = '$'
+OP_DIVISOR        = '/'
 OP_WRMSR          = 'm'
 OP_RDMSR          = 'M'
 OP_CPUID          = '#'
@@ -152,7 +158,7 @@ dump_acc:
 # move 32 bit immediate value to EAX
 move_imm:
 	cmp  al, OP_MOVE_IMM
-	jne  cmd_invd
+	jne  cmd_divisor
 	mov  cl, 0x08
 	xor  ebx, ebx
 0:	shl  ecx, 0x10
@@ -179,6 +185,24 @@ move_imm:
 	dec  cl
 	jne  0b
 4:	movd mm0, ebx		# will be restored into EAX
+	jmp  read_command
+
+# Change the baudrate divisor
+cmd_divisor:
+	cmp  al, OP_DIVISOR
+	jne  cmd_invd
+	mov  dx, COM_BASE + COM_LCR
+	mov  al, 0x80		# Set divisor access
+	out  dx, al
+	mov  dx, COM_BASE + COM_DLL
+	movd eax, mm0
+	out  dx, al
+	inc  dx
+	mov  al, ah
+	out  dx, al
+	mov  dx, COM_BASE + COM_LCR
+	mov  al, 0x03		# Unset divisor access. Set 8N1 mode
+	out  dx, al
 	jmp  read_command
 
 # INVD
