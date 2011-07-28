@@ -407,4 +407,3 @@ read_echo:
 
 prompt_string:
 	.string "s/u/r/q> "
-
