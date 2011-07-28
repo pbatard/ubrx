@@ -323,19 +323,18 @@ in_byte:
 	cmp  bl, SIZE_BYTE
 	jne  in_word
 	in   al, dx
-	jmp  in_acc
+	jmp  0f
 in_word:
 	cmp  bl, SIZE_WORD
 	jne  in_long
 	in   ax, dx
-	jmp  in_acc
+	jmp  0f
 in_long:
 	cmp  bl, SIZE_LONG
-	jne  read_command
+	jne  1f
 	in   eax, dx
-in_acc:
-	movd mm0, eax
-	jmp  read_command
+0:	movd mm0, eax
+1:	jmp  read_command
 
 # Move AL/AX/EAX to the memory address pointed by EDX
 acc_to_mem:
@@ -366,7 +365,7 @@ accmem_long:
 # Move the content of the memory address pointed by EDX into AL/AX/EAX
 mem_to_acc:
 	cmp  ah, OP_MEM_TO_ACC
-	jne  0f
+	jne  1f
 	movd eax, mm3
 	mov  di, ax
 	xor  ax, ax
@@ -384,9 +383,10 @@ memacc_word:
 	jmp  0f
 memacc_long:
 	cmp  bl, SIZE_LONG
-	jne  0f
+	jne  1f
 	mov  eax, [di]
-0:	jmp  read_command
+0:	movd mm0, eax
+1:	jmp  read_command
 
 
 /********************************************************************************/
