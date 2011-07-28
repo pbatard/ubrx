@@ -92,6 +92,7 @@ vmware: 512k
 flash: 128k
 	@# Use the layout feature of flashrom to flash only the bootblock
 	@flashrom -p nicrealtek -l 128k.layout -i bootblock -n -w $(TARGET).rom
+	@echo -e "\007"
 
 erase:
 	@flashrom -p nicrealtek -E
