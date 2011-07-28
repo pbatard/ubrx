@@ -63,9 +63,6 @@ PERFORM_MSR_TEST = 0	# Set to nonzero if you want to have MSR test performed as
 FORCE_PANIC      = 0	# Force panic mode on the first valid UART found without
 			# waiting for panic key (for testing only)
 MAX_LDN          = 0x20	# Maximum number of LDNs we test for UART functionality
-USE_IO_DELAY     = 1	# Add a few idle cycles between in/out operations in close
-			# sequence. This significantly increases the payload size
-			# but might be safer, as per various BIOS ROMs disassembly.
 USE_DIAGNOSTIC   = 1	# Send POST codes to a BIOS diagnostics card
 TEST_EXTRA_PORTS = 1	# Test additional Super I/O ports beside 0x2E & 0x4E
 
@@ -201,15 +198,6 @@ AMD_SB_PM_DATA   = 0xCD7
 	mov  al, \value
   .endif
 	out  0x80, al
-.endif
-.endm
-
-# Add a 6 CPU cycles delay
-.macro IO_DELAY
-.if USE_IO_DELAY
-	jmp  9f
-9:	jmp  9f			# Label '9' is not used in the program
-9:
 .endif
 .endm
 
@@ -349,35 +337,29 @@ enter_pnp_conf:
 	jne  0f
 	mov  al, 0x87		# key = 0x87, 0x87
 	out  dx, al
-	IO_DELAY
 	jmp  1f
 0:	cmp  cl, 0x03		# Intel
 	jne  0f
 	mov  al, 0x80		# key = 0x80, 0x86
 	out  dx, al
-	IO_DELAY
 	mov  al, 0x86
 	jmp  1f
 0:	mov  al, 0x87		# ITE
 	out  dx, al
-	IO_DELAY
 	mov  al, 0x01
 	out  dx, al
-	IO_DELAY
 	mov  al, 0x55
 	out  dx, al
 	cmp  dx, 0x2e
 	je   1f			# key = 0x87, 0x01, 0x55, 0x55 if port 0x2E
 	mov  al, 0xaa		# key = 0x87, 0x01, 0x55, 0xaa otherwise
 1:	out  dx, al
-	IO_DELAY
 
 read_id:
 	DIAG 0xF1
 	xor  ah, ah		# clear panic result
 	mov  al, PNP_ID		# attempt to read PnP Super I/O chip ID
 	out  dx, al
-	IO_DELAY
 	inc  dx
 	in   al, dx		# read the value at [base+1]
 	cmp  al, 0xff		# we consider FF or 00 to mean not a PnP chip
@@ -392,7 +374,6 @@ read_id:
 	mov  al, bl
 	xor  al, 0x02		# flip only one of the lower bits
 	out  dx, al
-	IO_DELAY
 	in   al, dx
 	cmp  al, bl
 	jne  restore_base_1	# the value has changed => not a PnP Super I/O
@@ -408,7 +389,6 @@ read_id:
 test_ldn:
 	mov  al, bl
 	out  dx, al
-	IO_DELAY
 	in   al, dx
 	cmp  al, bl
 	jne  0f
@@ -431,7 +411,6 @@ restore_base_1:
 	GET_SUPERIO_BASE
 	mov  al, PNP_LDN	# in case this is a PnP chip, set the address to LDN before 
 	out  dx, al		# we write at base+1, as writing an LDN is a safe operation
-	IO_DELAY		# because of POPX
 	inc  dx
 	POPXP al		# original value of [base+1]
 	out  dx, al
@@ -496,7 +475,6 @@ exit_pnp_conf:
 	mov  bl, al
 	mov  al, PC97338_FER	# FER register (address 0)
 	out  dx, al
-	IO_DELAY
 	inc  dx
 	in   al, dx		# keep a copy of the original value at 0x2F
 	mov  bh, al
@@ -529,7 +507,6 @@ vm_restore:
 	mov  dx, 0x2e		# VMware Super I/O base
 	mov  al, bl
 	out  dx, al		# Restore original values before we leave
-	IO_DELAY
 	inc  dx
 	mov  al, bh
 	out  dx, al
@@ -639,11 +616,9 @@ lpc_intel:
 superio_out:
 	GET_SUPERIO_BASE
 	out  dx, al
-	IO_DELAY
 	inc  dx
 	xchg al, ah
 	out  dx, al
-	IO_DELAY
 	jmp  sp
 
 # MODIFIES: DX, AL, EDI
@@ -653,10 +628,8 @@ superio_out:
 superio_in:
 	GET_SUPERIO_BASE 
 	out  dx, al
-	IO_DELAY
 	inc  dx
 	in   al, dx
-	IO_DELAY
 	jmp  sp
 
 # MODIFIES: DX, AX
@@ -668,7 +641,6 @@ serial_out:
 	add  dl, al		# We don't overflow to DH
 	mov  al, ah
 	out  dx, al
-	IO_DELAY
 	jmp  sp
 
 # MODIFIES: DX, SI, CX, AX
@@ -687,12 +659,10 @@ write_serial_conf:
 	# empty FIFO if needed
 0:	mov  dx, COM_BASE + COM_LSR
 	in   al, dx
-	IO_DELAY
 	and  al, 0x01
 	je   0f
 	mov  dx, COM_BASE
 	in   al, dx
-	IO_DELAY
 	jmp  0b
 0:	POP_SP
 	jmp  sp
@@ -707,7 +677,6 @@ putchar:
 	mov  ah, al
 tx_wait:
 	in   al, dx
-#	IO_DELAY
 	and  al, 0x20		# Check that transmit buffer is empty
 	jz   tx_wait
 	mov  dx, COM_BASE + COM_THR
@@ -736,7 +705,6 @@ readchar:
 	mov  dx, RTC_ADDRESS
 	mov  al, 0x0C		# clear any existing PI by reading register C
 	out  dx, al
-	IO_DELAY
 	inc  dx
 	in   al, dx
 	xor  ah, ah		# use AH as first iteration flag
@@ -756,7 +724,6 @@ readchar:
 	mov  dx, RTC_ADDRESS
 	mov  al, 0x0C		# check for PI
 	out  dx, al
-	IO_DELAY
 	inc  dx
 	in   al, dx
 	and  al, 0x40
@@ -784,22 +751,17 @@ init_timer:
 	mov  dx, RTC_ADDRESS
 	mov  al, 0x0A		# RTC Status Register A
 	out  dx, al
-	IO_DELAY
 	inc  dx
 	in   al, dx
-	IO_DELAY
 	and  al, 0xf0		# Set Periodic Interrupt frequency
 	or   al, 0x06		# 1024 Hz
 	out  dx, al
-	IO_DELAY
 	dec  dx
 
 	mov  al, 0x0B		# RTC Status Register A
 	out  dx, al
-	IO_DELAY
 	inc  dx
 	in   al, dx
-	IO_DELAY
 	or   al, 0x40		# Enable Periodic Interrupt
 	out  dx, al
 	jmp  sp
@@ -812,12 +774,9 @@ wait_timer:
 	mov  dx, RTC_ADDRESS
 	mov  al, 0x0C
 	out  dx, al
-	IO_DELAY
 	inc  dx
 	in   al, dx		# clear any existing PI by reading register C
-	IO_DELAY
 0:	in   al, dx
-	IO_DELAY
 	and  al, 0x40
 	je   0b			# PI bit is only set once per ms
 	loop 0b			# PI bit was set => decrement 1 ms from timeout
@@ -879,14 +838,12 @@ xt_init:
 	DIAG 0x76
 	mov  al, PNP_ID
 	out  dx, al
-	IO_DELAY
 	inc  dx
 	in   al, dx
 	shl  ax, 0x08
 	dec  dx
 	mov  al, PNP_ID+1
 	out  dx, al
-	IO_DELAY
 	inc  dx
 	in   al, dx
 	mov  cx, ax		# CX  = 2 byte chip ID
@@ -1088,7 +1045,6 @@ check_16550:
 	inc  bl	# 0x0a
 	mov  al, 0x40		# As per the 16550D specs "bits 4 to 7 are always logic 0"
 	out  dx, al
-	IO_DELAY
 	in   al, dx
 	or   al, al
 	je   0f			# should still be zero
@@ -1113,7 +1069,6 @@ check_16550:
 	mov  cl, al		# "DLM" can be nonzero => keep a copy in CL
 	xor  al, 0x40		# flip bit 6
 	out  dx, al
-	IO_DELAY
 	in   al, dx
 	xor  al, cl
 	cmp  al, 0x40		# did it stick?
@@ -1122,7 +1077,6 @@ check_16550:
 	# fallthrough, as we need to restore "IER/DLM" before we leave
 0:	mov  al, cl		# unflip the bit (restore old value)
 	out  dx, al
-	IO_DELAY
 	in   al, dx
 	cmp  al, cl
 	jne  restore_dlab	# NB: will return code 0x0c
@@ -1145,7 +1099,6 @@ check_16550:
 	# write new divisor 0x0001	
 	xor  al, al
 	out  dx, al		# DLM = 0x00
-	IO_DELAY
 	in   al, dx		# sanity check
 	or   al, al
 	jne  restore_dlm
@@ -1153,7 +1106,6 @@ check_16550:
 	inc  al	
 	dec  dx
 	out  dx, al		# DLL = 0x01
-	IO_DELAY
 	in   al, dx		# sanity check
 	cmp  al, 0x01
 	jne  restore_dll
@@ -1164,7 +1116,6 @@ check_16550:
 	shr  eax, 0x10          # copy of original LCR
 	mov  dx, COM_BASE + COM_LCR
 	out  dx, al
-	IO_DELAY
 
 	# 5c. Put 16550 in loop mode
 	mov  dx, COM_BASE + COM_MCR
@@ -1174,7 +1125,6 @@ check_16550:
 	inc  bl	# 0x11
 	mov  al, 0x10		# loop mode
 	out  dx, al
-	IO_DELAY
 	in   al, dx
 	cmp  al, 0x10
 	jne  restore_dll	# sanity check
@@ -1183,7 +1133,6 @@ check_16550:
 	# 5d. write a byte, see if we read it back (NOTE: 5 bit length is to be assumed)
 	mov  dx, COM_BASE + COM_THR
 	in   al, dx
-	IO_DELAY
 	mov  ah, al		# keep a copy in case we need to restore
 	mov  al, 0x15		# 5 bit test pattern (most 16550s start in 5 bits mode)
 	out  dx, al
@@ -1201,24 +1150,19 @@ restore_thr:
 	mov  dx, COM_BASE + COM_THR
 	mov  al, ah
 	out  dx, al
-	IO_DELAY
 unset_loop:
 	mov  dx, COM_BASE + COM_MCR
 	in   al, dx
-	IO_DELAY
 	and  al, 0xef		# safely unset loop mode (register may not be zero)
 	out  dx, al
-	IO_DELAY
 restore_dll:
 	mov  dx, COM_BASE + COM_DLL
 	mov  al, ch
 	out  dx, al
-	IO_DELAY
 restore_dlm:
 	mov  dx, COM_BASE + COM_DLM
 	mov  al, cl
 	out  dx, al
-	IO_DELAY
 restore_dlab:
 	shr  eax, 0x10		# copy of original LCR
 	mov  dx, COM_BASE + COM_LCR
