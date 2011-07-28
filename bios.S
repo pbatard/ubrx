@@ -1022,7 +1022,6 @@ check_16550:
 	xor  al, 0x40		# flip bit 6
 	xor  ah, al		# what we expect to read back (bit isolated)
 	out  dx, al
-	IO_DELAY	
 	in   al, dx		# readback
 	and  al, 0x40		# isolate the bit
 	cmp  ah, al
@@ -1030,7 +1029,6 @@ check_16550:
 	inc  bl	# 0x08
 	xor  al, 0x40
 	out  dx, al		# safely restore bit (don't leave it on longer than needed)
-	IO_DELAY	
 	mov  ah, al
 	in   al, dx		# extra sanity check
 	cmp  al, ah
