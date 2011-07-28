@@ -100,9 +100,9 @@ Testing
 -------
 
 Once UBRX has been flashed onto your BIOS chip, you should connect one of its
-serial port to another computer with a Null Modem cable, open a console (115200
-bauds, 8N1, no handshaking) and then power up the machine with the UBRX BIOS
-while pressing the Space Bar in the console window.
+serial port to another computer with a Null Modem cable, open a console (57600
+bauds, 8N1, XON/XOFF a.k.a. "Software" handshaking) and then power up the 
+machine with the UBRX BIOS while pressing the Space Bar in the console window.
 If detection of the serial port was succesful, you should end up with a prompt
 where recovery commands are available.
 
@@ -202,3 +202,4 @@ Only once we have successfully identified a 16650 UART do we attempt to fully
 configure it and read the console request key. If multiple UARTs have been
 identified, these will be checked in sequence, meaning that any serial port
 available on the motherboard can be used for console access.
+

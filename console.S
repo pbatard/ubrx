@@ -55,7 +55,7 @@ SIZE_LONG         = 0x02
 # Note: the last EAX transfered will be used as RAM/CAR address
 
 
-# Fixes a binutil/ld bug where the address if off by 2 on cross section jumps
+# Fixes a binutil/ld bug where the address is off by 2 on cross section jumps
 .macro  JMP_XS addr
 .if JMP_WORKAROUND
 	jmp  \addr + 2
@@ -394,3 +394,4 @@ read_echo:
 
 prompt_string:
 	.string "s/u/r/q> "
+

@@ -44,7 +44,11 @@
 /********************************************************************************/
 /* Build variables:                                                             */
 /********************************************************************************/
-COM_BASE         = 0x3F8 # See further down for valid I/O values
+COM_BASE         = 0x3F8  # See further down for valid I/O values
+BAUDRATE_DIVISOR = 0x0002 #  4800 = 0x0018,  9600 = 0x000C,  19200 = 0x0006,
+                          # 38400 = 0x0003, 57600 = 0x0002, 115200 = 0x0001
+                          # We default to 57600, as 115200 can lead to FIFO
+                          # overflow for code executed on a 150ns read access flash
 PANIC_KEY        = ' '  # Key to press to enter panic mode (default: <SPACE>)
 PANIC_COUNT      = 5    # Number of times the key must be read to access panic mode
 VMWARE_SUPPORT   = 1	# Include support for VMware platform. 
@@ -107,6 +111,10 @@ COM_LCR          = 0x03	# Line Control Register
 COM_MCR          = 0x04	# Modem Control Registrer
 COM_LSR          = 0x05	# Line Status Register
 COM_SCR          = 0x07	# Scratch register
+
+CHAR_XON          = 0x11
+CHAR_XOFF         = 0x13
+
 # PCI
 PCI_ADDR         = 0xCF8
 PCI_DATA         = 0xCFC
@@ -167,7 +175,7 @@ AMD_SB_PM_DATA   = 0xCD7
 9:	# see http://sourceware.org/binutils/docs-2.21/as/Symbol-Names.html
 .endm
 
-# Fixes a binutil/ld bug where the address if off by 2 on cross section jumps
+# Fixes a binutil/ld bug where the address is off by 2 on cross section jumps
 .macro  JMP_XS addr
 .if JMP_WORKAROUND
 	jmp  \addr + 2
@@ -699,7 +707,7 @@ putchar:
 	mov  ah, al
 tx_wait:
 	in   al, dx
-	IO_DELAY
+#	IO_DELAY
 	and  al, 0x20		# Check that transmit buffer is empty
 	jz   tx_wait
 	mov  dx, COM_BASE + COM_THR
@@ -711,23 +719,39 @@ tx_wait:
 # Read a serial char with timeout. Wait indefinitely if timeout = 0.
 # IN: CX = timeout in ~1 ms (+/- ~1 ms => MUST be at least 2)
 # OUT: AX = character read from serial, or 0xFFFF if timeout
+# Note: When executed in ROM, without cache, and from a slow ROM chip
+# (eg 150 ns read access time) it is very possible that the FIFO 
+# buffer will overflow before we have a chance to send XOFF if the
+# baudrate is too high (eg. 115200). If that is the case, please reduce
+# the baudrate
+# TODO: return FFFE on FIFO overflow
 .globl readchar
 readchar:
-	xor  ax, ax
+	# Wait for TX FIFO and shift register to be empty. This ensures
+	# XON/XOFF can be output immediately without checking.
+0:	mov  dx, COM_BASE + COM_LSR
+	in   al, dx
+	and  al, 0x40
+	jz   0b
 	mov  dx, RTC_ADDRESS
 	mov  al, 0x0C		# clear any existing PI by reading register C
 	out  dx, al
 	IO_DELAY
 	inc  dx
 	in   al, dx
-	IO_DELAY
-
+	xor  ah, ah		# use AH as first iteration flag
 0:	mov  dx, COM_BASE + COM_LSR
 	in   al, dx
-	IO_DELAY
 	and  al, 0x01
-	jne  0f			# got a character
-	or   cx, cx		# if timeout is zero, wait forever
+	jne  got_char
+	# Only send XON if the RX FIFO is empty on entry (prevents overflow) 
+	or   ah, ah		# is it first iteration?
+	jne  1f
+	inc  ah			# buffer empty on first iteration => send XON
+	mov  dx, COM_BASE + COM_THR
+	mov  al, CHAR_XON
+	out  dx, al
+1:	or   cx, cx		# if timeout is zero, wait forever
 	je   0b
 	mov  dx, RTC_ADDRESS
 	mov  al, 0x0C		# check for PI
@@ -741,9 +765,13 @@ readchar:
 
 	mov  ax, 0xffff		# no character was read => return -1
 	jmp  sp
-0:	mov  dx, COM_BASE + COM_RBR
-	in   al, dx		# return character
-	IO_DELAY
+got_char:
+	mov  dx, COM_BASE	# THR & RBR
+	or   ah, ah
+	je   0f			# only send XOFF if the char wasn't read on first iteration
+	mov  al, CHAR_XOFF
+	out  dx, al
+0:	in   al, dx		# return character
 	jmp  sp
 
 # MODIFIES: AL, DX
@@ -1237,8 +1265,8 @@ pnp_superio_base_end:
 serial_conf:			# See http://www.versalogic.com/kb/KB.asp?KBID=1395
 	.byte COM_MCR, 0x00	# RTS/DTS off, disable loopback
 	.byte COM_LCR, 0x80	# Set DLAB (access baudrate registers)
-	.byte COM_DLL, 0x01	# Baud Rate 115200 = 0x0001
-	.byte COM_DLM, 0x00
+	.byte COM_DLL, BAUDRATE_DIVISOR
+	.byte COM_DLM, BAUDRATE_DIVISOR >> 8
 	.byte COM_LCR, 0x03	# Unset DLAB. Set 8N1 mode
 	.byte COM_FCR, 0x07	# Enable & reset FIFOs. DMA mode 0.
 serial_conf_end:
