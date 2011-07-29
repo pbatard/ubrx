@@ -462,18 +462,18 @@ lpc_amd:
 	mov  ax, SB800_MMIO_PAGE	# Set our base page
 	mov  es, ax			# ES does not need to be restored
 	mov  di, 0xe00 + 0x40		# Misc. Registers: MiscClkCntrl
-	mov  al, [di]
+	mov  al, es:[di]
 	and  al, 0xf8
 	or   al, 0x02			# Enable and set Device_CLK1 (Super I/O) to 48 Mhz
-	mov  [di], al
+	mov  es:[di], al
 # TODO: SB900 vs SB800 detection
 .if SB900_48MHZ_INIT
  	# Program ClkDrvSth2 OSCOUT1_CLK_sel for 48 MHz (default is 14 MHz)
 	mov  di, 0xe00 + 0x28
-	mov  eax, [di]
+	mov  eax, es:[di]
 	and  eax, ~(7 << 16)
 	or   eax,  (2 << 16)
-	mov  [di], eax
+	mov  es:[di], eax
 .endif
 .endif
 	jmp  sp

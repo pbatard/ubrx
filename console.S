@@ -95,7 +95,7 @@ major_cmd:
 	cmp  al, 0x0a
 	je   display_prompt
 	jmp  major_cmd
-	
+
 run_prog:
 	movd eax, mm1		# EBX = 32 bit stack pointer
 	mov  sp, ax
@@ -346,20 +346,21 @@ acc_to_mem:
 	xor  ax, ax
 	shr  eax, 0x04		# convert to segment
 	mov  es, ax
+	movd eax, mm0
 accmem_byte:
 	cmp  bl, SIZE_BYTE
 	jne  accmem_word
-	mov  [di], al
+	mov  es:[di], al
 	jmp  0f
 accmem_word:
 	cmp  bl, SIZE_WORD
 	jne  accmem_long
-	mov  [di], ax
+	mov  es:[di], ax
 	jmp  0f
 accmem_long:
 	cmp  bl, SIZE_LONG
 	jne  0f
-	mov  [di], eax
+	mov  es:[di], eax
 0:	jmp  read_command
 
 # Move the content of the memory address pointed by EDX into AL/AX/EAX
@@ -374,17 +375,17 @@ mem_to_acc:
 memacc_byte:
 	cmp  bl, SIZE_BYTE
 	jne  memacc_word
-	mov  al, [di]
+	mov  al, es:[di]
 	jmp  0f
 memacc_word:
 	cmp  bl, SIZE_WORD
 	jne  memacc_long
-	mov  ax, [di]
+	mov  ax, es:[di]
 	jmp  0f
 memacc_long:
 	cmp  bl, SIZE_LONG
 	jne  1f
-	mov  eax, [di]
+	mov  eax, es:[di]
 0:	movd mm0, eax
 1:	jmp  read_command
 
