@@ -102,6 +102,7 @@ run_prog:
 	xor  ax, ax
 	shr  eax, 0x04		# convert to segment
 	mov  ss, ax
+	DIAG 0x81
 	# perform stack test
 	mov  eax, 0x55AA55AA
 	push eax
@@ -113,9 +114,22 @@ run_prog:
 	pop  ebx
 	pop  ebx
 	cmp  eax, ebx
-	jne  0f
-	movd eax, mm0		# EAX = CS:IP
-	call eax
+	jne  display_prompt
+	# Now that we have a stack, we can make good use of it
+	# to jump to a user specified subroutine
+	DIAG 0x82
+	push cs			# push CS:IP for subroutine retf
+	push offset 0f
+	# Easiest way to issue a dynamic far call is to just
+	# push the destination CS:IP and issue a retf
+	movd eax, mm0           # EAX = dest CS:IP
+	mov  ebx, eax
+	xor  bx, bx
+	shr  ebx, 0x04		# convert to CS
+	push bx
+	push ax
+	retf			# far call to the target subroutine
+				# NB: the subroutine must end with retf as well
 0:	mov  ax, cs
 	mov  ss, ax
 	jmp  display_prompt
