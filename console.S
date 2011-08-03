@@ -38,7 +38,7 @@ JMP_WORKAROUND_INC = JMP_WORKAROUND
 # Script/setup mode commands
 OP_DUMP_ACC       = '?'
 OP_MOVE_IMM       = '$'
-OP_DIVISOR        = ':'  
+OP_DIVISOR        = ':'
 OP_WRMSR          = 'm'
 OP_RDMSR          = 'M'
 OP_CPUID          = '*'
@@ -288,12 +288,12 @@ cmd_write_range:
 	shr  eax, 4
 	mov  es, ax
 	movd ecx, mm2
-        shr  ecx, 2
+	shr  ecx, 2
 	mov  eax, 0xcbcbcbcb	# RETF
 	# TODO: rep stos
 0:	mov  es:[di], eax
-        add  di, 4
-        loop 0b
+	add  di, 4
+	loop 0b
 	jmp  read_command
 
 # EXIT - the current value of EAX will be used as RAM/CAR base (CS:IP)
