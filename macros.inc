@@ -50,8 +50,8 @@
 .endm
 # Same as above, but using BP instead of SP for return address
 .macro  ROM_CALL_BP addr
-        mov  bp, offset 9f
-        jmp  \addr
+	mov  bp, offset 9f
+	jmp  \addr
 9:
 .endm
 # Same as the first, but potentially patches for cross-segment
