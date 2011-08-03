@@ -86,14 +86,16 @@ display_prompt:
 	ROM_CALL_XS print_string
 	
 major_cmd:
-	ROM_CALL read_echo
+	ROM_CALL_BP read_echo
 	cmp  al, 's'		# direct hardware setup
 	je   hw_setup
 	cmp  al, 'u'		# upload to CAR/RAM through Y-modem
 #	je   ymodem_upload
 	cmp  al, 'r'		# run program in CAR/RAM
-	je   run_prog
-	cmp  al, 'q'		# quit to normal BIOS
+	jne  0f
+	ROM_CALL_BP newline
+	jmp  run_prog
+0:	cmp  al, 'q'		# quit to normal BIOS
 #	je   start_bios
 	cmp  al, 0x0a
 	je   display_prompt
@@ -143,25 +145,21 @@ run_prog:
 # RoC (RISC on CISC)
 # We use MM0, MM1, MM2 and MM3 in lieu of EAX, EBX, ECX, EDX respectively
 hw_setup:
-	mov al, 0x0d
-	ROM_CALL_XS putchar
-	mov al, 0x0a
-	ROM_CALL_XS putchar
-	xor  bp, bp
+	ROM_CALL_BP newline
+	xor  ebp, ebp
 read_command:
-	ROM_CALL read_echo
+	ROM_CALL_BP read_echo
 	cmp  al, 0x0a		# CR and LF reset the comment flag
-	je   0f
-	cmp  al, 0x0d
-	jne  1f
-0:	xor  bp, bp		# comment flag = OFF
-1:	cmp  al, 0x20
+	jne  0f
+	xor  ebp, ebp		# comment flag = OFF
+0:	cmp  al, 0x20
 	jle  read_command	# ignore tabs, space, etc.
-	or   bp, bp		# comment flag ON?
+	xor  bp, bp
+	or   ebp, ebp		# comment flag ON?
 	jne  read_command	# yes => ignore to EOL
 	cmp  al, OP_COMMENT	# comment start?
 	jne  0f	
-	inc  bp			# comment flag = ON
+	not  ebp		# comment flag = ON
 	jmp  read_command
 0:	movd ebx, mm1
 	movd ecx, mm2
@@ -182,7 +180,7 @@ move_imm:
 	mov  cl, 0x08
 	xor  ebx, ebx
 0:	shl  ecx, 0x10
-3:	ROM_CALL read_echo
+3:	ROM_CALL_BP read_echo
 1:	shr  ecx, 0x10
 	cmp  al, '0'		# ignore whitespaces
 	jge  1f
@@ -300,7 +298,9 @@ cmd_write_range:
 #        the current value of EBX will be used as SS:SP
 cmd_exit:
 	cmp  al, OP_EXIT
-	je   display_prompt
+	jne  acc_to_reg
+	ROM_CALL_BP newline
+	jmp  display_prompt
 
 # move EAX to one of EBX, ECX, EDX, CR0
 acc_to_reg:
@@ -460,17 +460,22 @@ memacc_long:
 /* Subroutines:                                                                 */
 /********************************************************************************/
 
-read_echo:
-	shl  esp, 0x10
-	xor  cx, cx		# infinite timeout
-	ROM_CALL_XS readchar
+newline:
+	mov  al, 0x0d
 	ROM_CALL_XS putchar
-	cmp  al, 0x0d		# CR -> CR/LF
-	jne  0f
 	mov  al, 0x0a
 	ROM_CALL_XS putchar
-0:	shr  esp, 0x10
-	jmp  sp
+	jmp  bp
+
+read_echo:
+	xor  cx, cx		# infinite timeout
+	ROM_CALL_XS readchar
+	cmp  al, 0x0a		# LF -> CR
+	je   newline
+	cmp  al, 0x0d		# LF -> CR
+	je   newline
+	ROM_CALL_XS putchar
+	jmp  bp
 
 prompt_string:
 	.string "s/u/r/q> "
