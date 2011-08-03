@@ -48,6 +48,13 @@
 	jmp  \addr		# of the jmp instruction (can be 2 or 3 bytes)
 9:	# see http://sourceware.org/binutils/docs-2.21/as/Symbol-Names.html
 .endm
+# Same as above, but using BP instead of SP for return address
+.macro  ROM_CALL_BP addr
+        mov  bp, offset 9f
+        jmp  \addr
+9:
+.endm
+# Same as the first, but potentially patches for cross-segment
 .macro  ROM_CALL_XS addr
 	mov  sp, offset 9f
 	JMP_XS \addr
