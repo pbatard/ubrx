@@ -250,7 +250,7 @@ cmd_rdmsr:
 # CPUID
 cmd_cpuid:
 	cmp  al, OP_CPUID
-	jne  cmd_read_range
+	jne  cmd_fill_range
 	movd eax, mm0
 	cpuid
 	movd mm0, eax
@@ -260,10 +260,12 @@ cmd_cpuid:
 	jmp  read_command
 
 # Read memory range 
-cmd_read_range:
+cmd_fill_range:
 	cmp  al, OP_READ_RANGE
-	jne  cmd_write_range
-# TODO: factorize this with write range
+	je   0f
+	cmp  al, OP_WRITE_RANGE
+	jne  cmd_exit
+0:	mov  bl, al
 	movd eax, mm0
 	mov  di, ax
 	xor  ax, ax
@@ -271,24 +273,15 @@ cmd_read_range:
 	mov  es, ax
 	movd ecx, mm2
 	shr  ecx, 2
-	# TODO: rep lods
+	cmp  bl, OP_READ_RANGE
+	jne  cmd_write_range
+	# NB rep lods & rep stos don't work here
 0:	mov  eax, es:[di]
 	add  di, 4
 	loop 0b
 	jmp  read_command
-
 cmd_write_range:
-	cmp  al, OP_WRITE_RANGE
-	jne  cmd_exit
-	movd eax, mm0
-	mov  di, ax
-	xor  ax, ax
-	shr  eax, 4
-	mov  es, ax
-	movd ecx, mm2
-	shr  ecx, 2
 	mov  eax, 0xcbcbcbcb	# RETF
-	# TODO: rep stos
 0:	mov  es:[di], eax
 	add  di, 4
 	loop 0b
