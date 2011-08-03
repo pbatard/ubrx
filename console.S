@@ -38,12 +38,15 @@ JMP_WORKAROUND_INC = JMP_WORKAROUND
 # Script/setup mode commands
 OP_DUMP_ACC       = '?'
 OP_MOVE_IMM       = '$'
-OP_DIVISOR        = '/'
+OP_DIVISOR        = ':'  
 OP_WRMSR          = 'm'
 OP_RDMSR          = 'M'
-OP_CPUID          = '#'
+OP_CPUID          = '*'
 OP_INVD           = '!'
 OP_EXIT           = '.'
+OP_READ_RANGE     = '<'
+OP_WRITE_RANGE    = '>'
+OP_COMMENT        = '#'
 OP_ACC_TO_REG     = 'a' & 0xf8	# "abcd" [61-64]
 OP_REG_TO_ACC     = 'A' & 0xf8	# "ABCD" [41-44]
 OP_ACC_TO_PORT    = 'p'		# "pqr" [70-72]
@@ -128,9 +131,12 @@ run_prog:
 	shr  ebx, 0x04		# convert to CS
 	push bx
 	push ax
+	xor  eax, eax
+	cpuid			# serializing instruction => update cache
 	retf			# far call to the target subroutine
 				# NB: the subroutine must end with retf as well
-0:	mov  ax, cs
+0:	DIAG 0x83
+	mov  ax, cs
 	mov  ss, ax
 	jmp  display_prompt
 
@@ -141,11 +147,23 @@ hw_setup:
 	ROM_CALL_XS putchar
 	mov al, 0x0a
 	ROM_CALL_XS putchar
+	xor  bp, bp
 read_command:
 	ROM_CALL read_echo
-0:	cmp  al, 0x20
-	jle  read_command	# ignore carriage returns, tabs, space, etc.
-	movd ebx, mm1
+	cmp  al, 0x0a		# CR and LF reset the comment flag
+	je   0f
+	cmp  al, 0x0d
+	jne  1f
+0:	xor  bp, bp		# comment flag = OFF
+1:	cmp  al, 0x20
+	jle  read_command	# ignore tabs, space, etc.
+	or   bp, bp		# comment flag ON?
+	jne  read_command	# yes => ignore to EOL
+	cmp  al, OP_COMMENT	# comment start?
+	jne  0f	
+	inc  bp			# comment flag = ON
+	jmp  read_command
+0:	movd ebx, mm1
 	movd ecx, mm2
 	movd edx, mm3
 
@@ -234,7 +252,7 @@ cmd_rdmsr:
 # CPUID
 cmd_cpuid:
 	cmp  al, OP_CPUID
-	jne  cmd_exit
+	jne  cmd_read_range
 	movd eax, mm0
 	cpuid
 	movd mm0, eax
@@ -243,6 +261,40 @@ cmd_cpuid:
 	movd mm3, edx
 	jmp  read_command
 
+# Read memory range 
+cmd_read_range:
+	cmp  al, OP_READ_RANGE
+	jne  cmd_write_range
+# TODO: factorize this with write range
+	movd eax, mm0
+	mov  di, ax
+	xor  ax, ax
+	shr  eax, 4
+	mov  es, ax
+	movd ecx, mm2
+	shr  ecx, 2
+	# TODO: rep lods
+0:	mov  eax, es:[di]
+	add  di, 4
+	loop 0b
+	jmp  read_command
+
+cmd_write_range:
+	cmp  al, OP_WRITE_RANGE
+	jne  cmd_exit
+	movd eax, mm0
+	mov  di, ax
+	xor  ax, ax
+	shr  eax, 4
+	mov  es, ax
+	movd ecx, mm2
+        shr  ecx, 2
+	mov  eax, 0xcbcbcbcb	# RETF
+	# TODO: rep stos
+0:	mov  es:[di], eax
+        add  di, 4
+        loop 0b
+	jmp  read_command
 
 # EXIT - the current value of EAX will be used as RAM/CAR base (CS:IP)
 #        the current value of EBX will be used as SS:SP

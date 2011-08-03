@@ -91,7 +91,7 @@ vmware: 512k
 # Flash/Erase a 128 KB BIOS using flashrom against a RealTek NIC
 flash: 128k
 	@# Use the layout feature of flashrom to flash only the bootblock
-	@flashrom -p nicrealtek -l 128k.layout -i bootblock -n -w $(TARGET).rom
+	@flashrom -p nicrealtek -l 128k.layout -i bootblock -w $(TARGET).rom
 	@echo -e "\007"
 
 erase:
@@ -105,7 +105,7 @@ p5b: 1m
 	@echo "[CC]  $@"
 	@$(CC) -c -o $*.o $(CFLAGS) $<
 
-%.o: %.S Makefile mmx_stack.inc _jmptest
+%.o: %.S Makefile mmx_stack.inc config.inc macros.inc _jmptest
 	@echo "[AS]  $<"
 	@$(ASM) -D JMP_WORKAROUND=`cat _jmptest` -c -o $*.o $(CFLAGS) $<
 
@@ -148,4 +148,4 @@ $(TARGET).out: $(OBJECTS) $(TARGET).ld
 $(TARGET).rom: $(TARGET).out
 	@echo "[ROM] $@"
 	@# Note: -j only works for sections that have the 'ALLOC' flag set
-	@$(OBJCOPY) -O binary -j .begin -j .main -j .reset --gap-fill=0x0ff $< $@
+	@$(OBJCOPY) -O binary -j .begin -j .main -j .reset --gap-fill=0xff $< $@

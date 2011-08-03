@@ -566,7 +566,6 @@ tx_wait:
 # buffer will overflow before we have a chance to send XOFF if the
 # baudrate is too high (eg. 115200). If that is the case, please reduce
 # the baudrate
-# TODO: return FFFE on FIFO overflow
 .globl readchar
 readchar:
 	# Wait for TX FIFO and shift register to be empty. This ensures
@@ -583,12 +582,12 @@ readchar:
 	xor  ah, ah		# use AH as first iteration flag
 0:	mov  dx, COM_BASE + COM_LSR
 	in   al, dx
-	and  al, 0x01
+	and  al, 0x03		# test for both Data Ready and FIFO Overflow
 	jne  got_char
 	# Only send XON if the RX FIFO is empty on entry (prevents overflow) 
 	or   ah, ah		# is it first iteration?
-	jne  1f
-	inc  ah			# buffer empty on first iteration => send XON
+	jne  1f			# buffer empty on first iteration => send XON
+	mov  ah, CHAR_XOFF	# might as well store something useful in AH
 	mov  dx, COM_BASE + COM_THR
 	mov  al, CHAR_XON
 	out  dx, al
@@ -607,11 +606,17 @@ readchar:
 	jmp  sp
 got_char:
 	mov  dx, COM_BASE	# THR & RBR
-	or   ah, ah
+	xchg al, ah
+	or   al, al
 	je   0f			# only send XOFF if the char wasn't read on first iteration
-	mov  al, CHAR_XOFF
-	out  dx, al
-0:	in   al, dx		# return character
+	out  dx, al		# AL is CHAR_XOFF at this stage
+0:	cmp  ah, 0x01		# Data Ready
+	je   0f
+	mov  ax, 0xfffe		# overflow error
+	DIAG al
+	jmp  sp
+0:	xor  ah, ah	
+	in   al, dx		# return character
 	jmp  sp
 
 # MODIFIES: AL, DX
