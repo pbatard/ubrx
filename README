@@ -100,10 +100,10 @@ Testing
 -------
 
 Once UBRX has been flashed onto your BIOS chip, you should connect one of its
-serial port to another computer with a Null Modem cable, open a console (57600
+serial port to another computer with a Null Modem cable, open a console (115200
 bauds, 8N1, XON/XOFF a.k.a. "Software" handshaking) and then power up the 
 machine with the UBRX BIOS while pressing the Space Bar in the console window.
-If detection of the serial port was succesful, you should end up with a prompt
+If detection of the serial port was successful, you should end up with a prompt
 where recovery commands are available.
 
 Since UBRX can easily be tested on VMware, we encourage first running a test
@@ -114,7 +114,44 @@ you can check http://pete.akeo.ie/2011/06/crafting-bios-from-scratch.html.
 Usage
 -----
 
-See the USAGE text file
+Once in console mode, the typical usage scenario is as follows:
+
+1. User enters script mode ('s') to set up XIP (Execute in Place) on the ROM
+   flash. See the ####_xip.txt for an example of such a script. This is done
+   by mapping the UBRX BIOS region (FE000-FFFFF for an 8 KB bootblock) as 
+   WriteBack cache in the MTRRs, enabling caching, and then triggering XIP
+   with a far ret instruction (which is done transparently with '%')
+   The reason one wants to have XIP early is that, even with a very aggressive
+   XON/XOFF policy and a 16 byte 16550 buffer, uncached code running from a slow
+   flash chip will result in serial characters being dropped, even at lower
+   baudrates, which wrecks havoc on the ability to copy/paste scripts. Serial
+   transfers are also much *slower* without XIP.
+
+2. User continues cache initialization by enabling WriteBack caching for
+   L2-Unified as well as L1-Data, respectively for executables and stack. 
+   The reason L2 cache needs to be enabled is that the L1-Instruction cache is
+   separate from L1-Data and non writable, therefore any code that is uploaded
+   must reside in L2-Unified (which serves for both instruction and data).
+   Once L1 and L2 cache are initialized (which would tipically include a memory
+   fill instruction such as '<' or '>' so that subsequent attempts to read/write
+   to RAM are not carried out), the user provides the base address for uploads,
+   in EAX and the bade address for the stack in EBX.
+   
+3. With cache and stack setup, the user can now invoke the Y-modem upload 
+   command ('u') which transfers a binary executable into the L2-Unified cache
+   for execution. Note that the Y-modem upload requires a working stack, and of
+   course a working base address to upload to.
+
+4. Once the executable has been transferred, simply invoke the 'r' command to
+   run it. The uploaded executable can of course make use of the stack and should
+   end with a far ret instruction to return to the UBRX console. Be mindful that
+   the program starts in real address rather than protected mode.
+
+Both steps #1 and #2 are CPU specific, and therefore must be carried out in
+accordance with the CPU specifications with regards to MTRR access, total L1 and
+L2 cache available, etc.
+
+For more details on the available UBRX commands, see the USAGE text file.
 
 
 Known issues
