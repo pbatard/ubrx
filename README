@@ -157,11 +157,11 @@ For more details on the available UBRX commands, see the USAGE text file.
 Known issues
 ------------
 
-* If using putty, realterm or minicom, despite the use if XON/XOFF, characters
-  may be lost when pasting full scripts. This does not occur when using 
-  HyperTerminal on Windows. We're still investigating this problem...
-* When using com0com, VMWare seems to ignore the chosen baudrate and use 115200
-  instead. 
+* As long as you have not enabled XIP (see above), you are likely to lose 
+  characters when copy/pasting scripts. This is due to uncached flash ROM being
+  very slow to access, and is resolved as soon as XIP is setup.
+* When using com0com with VMWare, the baudrate you select doesn't seem to apply
+  and 115200 bauds is being used regardless. 
 
 Detection primer
 ----------------
