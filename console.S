@@ -127,7 +127,7 @@ run_prog:
 	push offset 0f
 	# Easiest way to issue a dynamic far call is to just
 	# push the destination CS:IP and issue a retf
-	movd eax, mm0           # EAX = dest CS:IP
+	movd eax, mm0		# EAX = dest CS:IP
 	mov  ebx, eax
 	xor  bx, bx
 	shr  ebx, 0x04		# convert to CS

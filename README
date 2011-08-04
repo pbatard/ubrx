@@ -117,6 +117,15 @@ Usage
 See the USAGE text file
 
 
+Known issues
+------------
+
+* If using putty, realterm or minicom, despite the use if XON/XOFF, characters
+  may be lost when pasting full scripts. This does not occur when using 
+  HyperTerminal on Windows. We're still investigating this problem...
+* When using com0com, VMWare seems to ignore the chosen baudrate and use 115200
+  instead. 
+
 Detection primer
 ----------------
 
@@ -202,4 +211,3 @@ Only once we have successfully identified a 16650 UART do we attempt to fully
 configure it and read the console request key. If multiple UARTs have been
 identified, these will be checked in sequence, meaning that any serial port
 available on the motherboard can be used for console access.
-

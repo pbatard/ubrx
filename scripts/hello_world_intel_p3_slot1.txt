@@ -1,0 +1,25 @@
+# The following script setups L1 and L2 for Cache as RAM, on a
+# Pentium III Slot 1 CPU, then uploads a small program and exits.
+# The program can then be run from the main prompt with 'r'
+
+$60000010 a		# disable cache
+$11e c $0 d $01043531 m	# setup L2 for Pentium III Slot 1
+$2ff c $0 d $c00 m	# fixed + var MTRRs
+$268 c $06060606 d m	# C0000-C7FFF as WB
+! $10 a			# flush and enable cache
+$8000 c $c0000 <	# preload region to L2-Uni
+# load our code in L1-Data
+$c0000 d $f8ba68b0 z	# 'h'
+$c0004 d $65b0ee03 z	# 'e'
+$c0008 d $ee03f8ba z
+$c000c d $f8ba6cb0 z	# 'l'
+$c0010 d $6cb0ee03 z	# 'l'
+$c0014 d $ee03f8ba z
+$c0018 d $f8ba6fb0 z	# 'o'
+$c001c d $0db0ee03 z	# CR
+$c0020 d $ee03f8ba z
+$c0024 d $f8ba0ab0 z	# LF
+$c0028 d $ffcbee03 z
+$8000 c $c0030 >	# flush L1-Data onto L2-Uni
+$c0800 b $c0000		# stack at C8000, code at C0000
+.

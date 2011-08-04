@@ -7,7 +7,7 @@ the choice of running the following 4 commands:
 
 's' : Script/Setup mode
 'u' : program Upload (currently not implemented)
-'r' : Run current program
+'r' : Run current program using EBX as stack pointer and EAX as start address
 'q' : Quit to normal BIOS bootup (currently not implemented)
 
 
@@ -25,12 +25,15 @@ for readability, as these are ignored by the interpreter.
 
 The following commands are available in script mode:
 
+# - comments:
+  Everything after this character, and up to the end of line, is ignored and
+  interpreted as a comment
 ? - dump accumulator:
   Display the current value of EAX in hexascii (32 bit).
 $ <hex value> - assign immediate:
   Assign an immediate 32 bit hexascii value to EAX. Leading zeroes can be
   ommitted.
-/ - change baudrate:
+: - change baudrate:
   Change the 16550 baud rate divisor using the current value of AX.
   Standard divisor values are 0x000C for 9600 bauds, 0x0006 for 19200,
   0x0002 for 57600 and 0x0001 for 115200.
@@ -49,7 +52,7 @@ x/y/z - move accumulator to memory
 X/Y/Z - move from memory to accumulator
   Move the byte/word/longword value of the 32 bit memory location indexed by EDX
   into AL/AX/EAX respectively.
-# - cpuid
+* - cpuid
   Issue the CPUID instruction. The current values of EAX will be used for the
   index. The returned values can be accessed in EAX/EBX/ECX/EDX.
 ! - invd
@@ -60,6 +63,13 @@ m - write to MSR
 M - read from MSR
   Read the 64 bit value from the Model Specific Register indexed by ECX into
   EDX:EAX.
+< - read memory range
+  Read ECX bytes (as longwords) from the start address indexed by EAX.
+> - write memory range
+  Write ECX bytes (as longwords) to the start address indexed by EAX.
+  The bytes are written as 0xCB (retl/retf), as this is the last instruction an
+  uploaded executable should issue to return to the UBRX console ('r'). 
+  The '<' and '>' instructions are intented for L1/L2 cache manipulation.
 . - exit script mode and return to main prompt.
 
 Remember:
@@ -92,13 +102,8 @@ Quit to normal bootup
 Leave UBRX and proceed with the rest of the regular BIOS execution
 
 
-Example script of CAR initialization for Intel CPUs
----------------------------------------------------
+Example scripts
+---------------
 
-This assumes the following initial values:
-CR0: [TODO]
-
-You should check your values using the script commands
-
-[TODO]
-
+Please see the scripts/ directory for examples of CAR initialization or actual
+program execution.

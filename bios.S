@@ -129,7 +129,7 @@ AMD_SB_PM_DATA   = 0xCD7
 /* This allows the .rom binary to be filled to the right size with objcopy.     */
 /********************************************************************************/
 .section begin, "a"			# The 'ALLOC' flag is needed for objcopy
-	.ascii "UBRX v0.2"
+	.ascii "UBRX v0.4"
 	.align 16, 0xff
 /********************************************************************************/
 
