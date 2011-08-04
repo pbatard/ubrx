@@ -33,13 +33,8 @@
 .endm
 
 # Fixes a binutil/ld bug where the address may be off by 2 on cross section jumps
-# Can't go into macros.inc due to a GNU AS limitation
 .macro  JMP_XS addr
-.if JMP_WORKAROUND_INC
-	jmp  \addr + 2
-.else
-	jmp  \addr
-.endif
+	jmp  \addr + JMP_WORKAROUND_OFFSET
 .endm
 
 # Jump to a subroutine (from same or different section)

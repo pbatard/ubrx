@@ -25,11 +25,11 @@
 .intel_syntax noprefix	# Use Intel assembler syntax (same as IDA Pro)
 .code16			# After reset, the x86 CPU is in real/16 bit mode
 /********************************************************************************/
+# Can't use externally defined macros in an include...  :(
+JMP_WORKAROUND_OFFSET = 2*JMP_WORKAROUND	# used in macros.inc
 
 .include "config.inc"
-# Can't use external defined macros into an include... :(
-JMP_WORKAROUND_INC = JMP_WORKAROUND
-.include "macros.inc"	# Always make sure config is included before macros
+.include "macros.inc"	# macros.inc must be included after config.inc
 .include "mmx_stack.inc"
 
 
