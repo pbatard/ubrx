@@ -1,12 +1,11 @@
 # The following script setups L1 and L2 for Cache as RAM, on a
 # Pentium III Slot 1 CPU, then uploads a small program and exits.
 # The program can then be run from the main prompt with 'r'
+# NOTE: before sending this, you must first have enabled XIP cache
 
-$60000010 a		# disable cache
 $11e c $0 d $01043531 m	# setup L2 for Pentium III Slot 1
-$2ff c $0 d $c00 m	# fixed + var MTRRs
+
 $268 c $06060606 d m	# C0000-C7FFF as WB
-! $10 a			# flush and enable cache
 $8000 c $c0000 <	# preload region to L2-Uni
 # load our code in L1-Data
 $c0000 d $f8ba68b0 z	# 'h'

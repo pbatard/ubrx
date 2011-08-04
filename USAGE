@@ -33,6 +33,10 @@ The following commands are available in script mode:
 $ <hex value> - assign immediate:
   Assign an immediate 32 bit hexascii value to EAX. Leading zeroes can be
   ommitted.
+| <hex value> - OR immediate
+  Bitwise OR of an immediate 32 bit hexascii value with EAX.
+& <hex value> - AND immediate
+  Bitwise AND of an immediate 32 bit hexascii value with EAX.
 : - change baudrate:
   Change the 16550 baud rate divisor using the current value of AX.
   Standard divisor values are 0x000C for 9600 bauds, 0x0006 for 19200,
@@ -52,6 +56,11 @@ x/y/z - move accumulator to memory
 X/Y/Z - move from memory to accumulator
   Move the byte/word/longword value of the 32 bit memory location indexed by EDX
   into AL/AX/EAX respectively.
+% - trigger XIP cache
+  Activate the XIP (eXecute In Place) mode by executing a far jump. This GREATLY
+  improves serial speed and eliminates data dropouts resulting from running slow
+  uncached ROM code. Typically, this is the first script command you want to run
+  after your cache has been setup. For examples, see the ####_xip.txt scripts.
 * - cpuid
   Issue the CPUID instruction. The current values of EAX will be used for the
   index. The returned values can be accessed in EAX/EBX/ECX/EDX.
