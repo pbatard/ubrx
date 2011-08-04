@@ -562,10 +562,11 @@ tx_wait:
 # IN: CX = timeout in ~1 ms (+/- ~1 ms => MUST be at least 2)
 # OUT: AX = character read from serial, or 0xFFFF if timeout
 # Note: When executed in ROM, without cache, and from a slow ROM chip
-# (eg 150 ns read access time) it is very possible that the FIFO 
-# buffer will overflow before we have a chance to send XOFF if the
-# baudrate is too high (eg. 115200). If that is the case, please reduce
-# the baudrate
+# (eg 150 ns read access time) the FIFO buffer is very likely to overflow
+# even with our aggressive use of XON/XOFF. This will lead to script lines
+# neing truncated during copy/paste and other nasty stuff. To remedy this 
+# you should first enable XIP (Execute in Place) through scripting. See
+# the scripts/ directory for examples on how to do that.
 .globl readchar
 readchar:
 	# Wait for TX FIFO and shift register to be empty. This ensures

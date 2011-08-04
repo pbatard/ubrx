@@ -22,7 +22,7 @@
 /* Build variables:                                                             */
 /********************************************************************************/
 COM_BASE         = 0x3F8   # See further down for valid I/O values
-BAUDRATE_DIVISOR = 0x0002  #  4800 = 0x0018,  9600 = 0x000C,  19200 = 0x0006,
+BAUDRATE_DIVISOR = 0x0001  #  4800 = 0x0018,  9600 = 0x000C,  19200 = 0x0006,
                            # 38400 = 0x0003, 57600 = 0x0002, 115200 = 0x0001
                            # We default to 57600, as a higher baudrate can lead to
                            # FIFO overflow if the flash access is slow (eg. 150 ns)

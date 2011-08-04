@@ -36,6 +36,7 @@ JMP_WORKAROUND_OFFSET = 2*JMP_WORKAROUND	# used in macros.inc
 /* Constants:                                                                   */
 /********************************************************************************/
 # Script/setup mode commands
+OP_COMMENT        = '#'
 OP_DUMP_ACC       = '?'
 OP_MOVE_IMM       = '$'
 OP_DIVISOR        = ':'
@@ -46,7 +47,9 @@ OP_INVD           = '!'
 OP_EXIT           = '.'
 OP_READ_RANGE     = '<'
 OP_WRITE_RANGE    = '>'
-OP_COMMENT        = '#'
+OP_XIP_TRIGGER    = '%'
+OP_AND            = '&'
+OP_OR             = '|'
 OP_ACC_TO_REG     = 'a' & 0xf8	# "abcd" [61-64]
 OP_REG_TO_ACC     = 'A' & 0xf8	# "ABCD" [41-44]
 OP_ACC_TO_PORT    = 'p'		# "pqr" [70-72]
@@ -149,6 +152,7 @@ hw_setup:
 	xor  ebp, ebp
 read_command:
 	ROM_CALL_BP read_echo
+read_command_have_char:
 	cmp  al, 0x0a		# CR and LF reset the comment flag
 	jne  0f
 	xor  ebp, ebp		# comment flag = OFF
@@ -173,36 +177,65 @@ dump_acc:
 	ROM_CALL_XS print_hex
 	jmp  read_command
 
-# move 32 bit immediate value to EAX
+# move 32 bit immediate value to EAX or AND/OR with existing
 move_imm:
 	cmp  al, OP_MOVE_IMM
+	je   0f
+	cmp  al, OP_AND
+	je   0f
+	cmp  al, OP_OR
 	jne  cmd_divisor
+0:	mov  ch, al
 	mov  cl, 0x08
 	xor  ebx, ebx
-0:	shl  ecx, 0x10
-3:	ROM_CALL_BP read_echo
-1:	shr  ecx, 0x10
-	cmp  al, '0'		# ignore whitespaces
-	jge  1f
-	cmp  cl, 0x08		# a whitespace encountered after the
-	je   3b			# beginning means early exit
-	jmp  4f 
-1:	inc  dl	
+read_digit:
+	shl  ecx, 0x10
+	ROM_CALL_BP read_echo
+	shr  ecx, 0x10
 	cmp  al, 'a'
-	jl   1f
+	jl   0f
+	cmp  al, 'f'
+	jg   not_a_digit
 	sub  al, 'a'-10
-	jmp  2f
-1:	cmp  al, 'A'
-	jl   1f
+	jmp  1f
+0:	cmp  al, 'A'
+	jl   0f
+	cmp  al, 'F'
+	jg   not_a_digit
 	sub  al, 'A'-10
-	jmp  2f
-1:	sub  al, '0'		# no garbage detection
-2:	and  al, 0x0f
-	shl  ebx, 0x04
+	jmp  1f
+0:	cmp  al, '0'
+	jl   not_a_digit
+	cmp  al, '9'
+	jg   not_a_digit
+	sub  al, '0'
+1:	shl  ebx, 0x04
 	add  bl, al
 	dec  cl
-	jne  0b
-4:	movd mm0, ebx		# will be restored into EAX
+	cmp  cl, 0x00
+	je   final_result
+	jmp  read_digit
+
+not_a_digit:
+	cmp  cl, 0x08		# allow tab or space at the beginning of the data
+	jne  final_result
+	cmp  al, 0x09
+	je   read_digit
+	cmp  al, ' '
+	je   read_digit
+
+final_result:
+	cmp  ch, OP_MOVE_IMM
+	je   1f
+	movd edx, mm0
+	cmp  ch, OP_AND	
+	jne  0f
+	and  ebx, edx
+	jmp  1f
+0:	or   ebx, edx
+1:	movd mm0, ebx		# will be restored into EAX
+	cmp  cl, 0x00
+	jne  read_command_have_char
 	jmp  read_command
 
 # Change the baudrate divisor
@@ -250,7 +283,7 @@ cmd_rdmsr:
 # CPUID
 cmd_cpuid:
 	cmp  al, OP_CPUID
-	jne  cmd_fill_range
+	jne  cmd_xip
 	movd eax, mm0
 	cpuid
 	movd mm0, eax
@@ -258,6 +291,16 @@ cmd_cpuid:
 	movd mm2, ecx
 	movd mm3, edx
 	jmp  read_command
+
+# Trigger XIP caching mode by executing a far ret instruction
+# If you want a serial connection that doesn't suck, you really want XIP
+cmd_xip:
+	cmp  al, OP_XIP_TRIGGER
+	jne  cmd_fill_range
+	mov  sp, offset 0f
+	retf			# FAR RET gets cached XIP going
+0:	.word offset read_command
+	.word 0xf000		# current CS should still be 0xf000 at this stage
 
 # Read memory range 
 cmd_fill_range:
