@@ -299,7 +299,7 @@ cmd_xip:
 	jne  cmd_fill_range
 	mov  sp, offset 0f
 	retf			# FAR RET gets cached XIP going
-0:	.word offset read_command
+0:	.word read_command
 	.word 0xf000		# current CS should still be 0xf000 at this stage
 
 # Read memory range 
