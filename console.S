@@ -223,6 +223,8 @@ not_a_digit:
 	je   read_digit
 	cmp  al, ' '
 	je   read_digit
+	cmp  al, OP_MOVE_IMM	# also allow extra immediate value prefixes
+	je   read_digit
 
 final_result:
 	cmp  ch, OP_MOVE_IMM

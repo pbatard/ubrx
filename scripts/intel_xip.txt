@@ -1,8 +1,8 @@
 # The following script enables XIP (eXecute In Place) for Intel CPUs
 # and turns on caching. This is the first script you should run
 
-A|60000000 a		# disable cache
+A|$60000000 a		# disable cache
 $2ff c $0 d $c00 m	# fixed + var MTRRs
 $26f c $06060000 d $0 m	# FE000-FFFFF
-A&9fffffff a		# enable cache
+A&$9fffffff a		# enable cache
 %			# start XIP
