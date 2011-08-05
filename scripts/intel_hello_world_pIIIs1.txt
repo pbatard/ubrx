@@ -3,7 +3,9 @@
 # The program can then be run from the main prompt with 'r'
 # NOTE: before sending this, you must first have enabled XIP cache
 
-$11e c $0 d $01043531 m	# setup L2 for Pentium III Slot 1
+# Setup L2-Unified cache for a Pentium III slot 1 CPU:
+# 512 MB address range, 2*256 KB banks, 4-way, latency 8
+$11e c M & $8c1800 | $2511 m
 
 $268 c $06060606 d m	# C0000-C7FFF as WB
 $8000 c $c0000 <	# preload region to L2-Uni
