@@ -42,6 +42,8 @@ FORCE_PANIC      = 0	# Force panic mode on the first valid UART found without
 MAX_LDN          = 0x20	# Maximum number of LDNs we test for UART functionality
 USE_DIAGNOSTIC   = 1	# Send POST codes to a BIOS diagnostics card
 TEST_EXTRA_PORTS = 1	# Test additional Super I/O ports beside 0x2E & 0x4E
+ENDIANNESS_SUPPORT = 1	# Set to nonzero if you want the ability to switch between
+			# Little/Big Endian when reading/writing ports or memory.
 
 # If you want to bypass (some of) the autodetection, and know your Super I/O base
 # as well as the LDN of the UART, you can provide them below:

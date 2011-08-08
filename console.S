@@ -56,6 +56,10 @@ OP_ACC_TO_PORT    = 'p'		# "pqr" [70-72]
 OP_PORT_TO_ACC    = 'P'		# "PQR" [50-52]
 OP_ACC_TO_MEM     = 'x'		# "xyz" [78-7A]
 OP_MEM_TO_ACC     = 'X'		# "XYZ" [58-5A]
+.if ENDIANNESS_SUPPORT
+OP_LITTLE_ENDIAN  = 'l'
+OP_BIG_ENDIAN     = 'L'
+.endif
 # Register sources/destinations
 REG_CR0           = 'a' & 0x07
 REG_EBX           = 'b' & 0x07
@@ -84,6 +88,7 @@ enter_console:
 	pxor mm1, mm1
 	pxor mm2, mm2
 	pxor mm3, mm3
+	pxor mm4, mm4		# flags
 display_prompt:
 	mov  si, offset prompt_string
 	ROM_CALL_XS print_string
@@ -298,11 +303,33 @@ cmd_cpuid:
 # If you want a serial connection that doesn't suck, you really want XIP
 cmd_xip:
 	cmp  al, OP_XIP_TRIGGER
+.if ENDIANNESS_SUPPORT
+	jne  cmd_big_endian
+.else
 	jne  cmd_fill_range
+.endif
 	mov  sp, offset 0f
 	retf			# FAR RET gets cached XIP going
 0:	.word read_command
 	.word 0xf000		# current CS should still be 0xf000 at this stage
+
+.if ENDIANNESS_SUPPORT
+cmd_big_endian:
+	cmp  al, OP_BIG_ENDIAN
+	jne  cmd_little_endian
+	movd ebx, mm4
+	mov  bl, 0x01
+	movd mm4, ebx
+	jmp  read_command
+
+cmd_little_endian:
+	cmp  al, OP_LITTLE_ENDIAN
+	jne  cmd_fill_range
+	movd ebx, mm4
+	xor  bl, bl
+	movd mm4, ebx
+	jmp  read_command
+.endif
 
 # Read memory range 
 cmd_fill_range:
@@ -406,17 +433,29 @@ out_byte:
 	cmp  bl, SIZE_BYTE
 	jne  out_word
 	out  dx, al
-	jmp  0f
+	jmp  1f
 out_word:
 	cmp  bl, SIZE_WORD
 	jne  out_long
-	out  dx, ax
-	jmp  0f
+.if ENDIANNESS_SUPPORT
+	movd ebx, mm4
+	or   bl, bl
+	je   0f
+	xchg ah, al
+.endif
+0:	out  dx, ax
+	jmp  1f
 out_long:
 	cmp  bl, SIZE_LONG
-	jne  0f
-	out  dx, eax
-0:	jmp  read_command	
+	jne  1f
+.if ENDIANNESS_SUPPORT
+	movd ebx, mm4
+	or   bl, bl
+	je   0f
+	bswap eax
+.endif	
+0:	out  dx, eax
+1:	jmp  read_command
 
 # Input the port indexed by DX to AL/AX/EAX
 port_to_acc:
@@ -432,11 +471,23 @@ in_word:
 	cmp  bl, SIZE_WORD
 	jne  in_long
 	in   ax, dx
+.if ENDIANNESS_SUPPORT
+	movd ebx, mm4
+	or   bl, bl
+	je   0f
+	xchg ah, al
+.endif
 	jmp  0f
 in_long:
 	cmp  bl, SIZE_LONG
 	jne  1f
 	in   eax, dx
+.if ENDIANNESS_SUPPORT
+	movd ebx, mm4
+	or   bl, bl
+	je   0f
+	bswap eax
+.endif
 0:	movd mm0, eax
 1:	jmp  read_command
 
@@ -455,17 +506,29 @@ accmem_byte:
 	cmp  bl, SIZE_BYTE
 	jne  accmem_word
 	mov  es:[di], al
-	jmp  0f
+	jmp  1f
 accmem_word:
 	cmp  bl, SIZE_WORD
 	jne  accmem_long
-	mov  es:[di], ax
-	jmp  0f
+.if ENDIANNESS_SUPPORT
+	movd ebx, mm4
+	or   bl, bl
+	je   0f
+	xchg ah, al
+.endif
+0:	mov  es:[di], ax
+	jmp  1f
 accmem_long:
 	cmp  bl, SIZE_LONG
-	jne  0f
-	mov  es:[di], eax
-0:	jmp  read_command
+	jne  1f
+.if ENDIANNESS_SUPPORT
+	movd ebx, mm4
+	or   bl, bl
+	je   0f
+	bswap eax
+.endif
+0:	mov  es:[di], eax
+1:	jmp  read_command
 
 # Move the content of the memory address pointed by EDX into AL/AX/EAX
 mem_to_acc:
@@ -485,11 +548,23 @@ memacc_word:
 	cmp  bl, SIZE_WORD
 	jne  memacc_long
 	mov  ax, es:[di]
+.if ENDIANNESS_SUPPORT
+	movd ebx, mm4
+	or   bl, bl
+	je   0f
+	xchg ah, al
+.endif
 	jmp  0f
 memacc_long:
 	cmp  bl, SIZE_LONG
 	jne  1f
 	mov  eax, es:[di]
+.if ENDIANNESS_SUPPORT
+	movd ebx, mm4
+	or   bl, bl
+	je   0f
+	bswap eax
+.endif
 0:	movd mm0, eax
 1:	jmp  read_command
 
