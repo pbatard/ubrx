@@ -19,7 +19,7 @@
 /********************************************************************************/
 
 # The following defines macros to allow the use of MMX as an elementary stack 
-# For PUSHX, up to 16 bytes can be stacked. For PUSH_SP, up to 4 SPs (8 bytes).
+# For PUSHX, up to 8 bytes can be stacked. For PUSH_SP, up to 4 SPs (8 bytes).
 # MM5 to MM7 are used (though MM7 is only used a scratch for pop/push)
 # The macros expect lowercase registers. i.e. 'PUSHX ax' and not 'PUSHX AX'
 # The macros are:
@@ -34,8 +34,6 @@
 #   be destroyed)
 # POP_SP: pops SP. The high word of ESP is DESTROYED during this operation
 
-# Set to zero if you don't want to use a dual MMX stack (which is costly!)
-USE_LARGE_STACK = 0
 
 # Compute stack delta, in bytes, according to the register being used
 .macro GET_GP_STACK_DELTA reg
@@ -145,12 +143,6 @@ GP_STACK_DELTA = 4
 GET_GP_STACK_DELTA \reg
 GET_EREG \reg
 SWAP_IF_NEEDED \reg
-.if USE_LARGE_STACK		# Dealing with dual MMX stack is costly
-	movq  mm7, mm5
-	psrlq mm7, 0x40 - (GP_STACK_DELTA * 0x08)
-	psllq mm4, (GP_STACK_DELTA * 0x08)
-	por   mm4, mm7
-.endif
 	movd  mm7, EREG
 .if (GP_STACK_DELTA == 1)
 	pand  mm7, [mmx_000000ff]
@@ -189,12 +181,6 @@ SWAP_IF_NEEDED \reg
 	or    EREG, ebp
 .endif
 	psrlq mm5, (GP_STACK_DELTA * 0x08)
-.if USE_LARGE_STACK
-	movq  mm7, mm4
-	psllq mm7, 0x40 - (GP_STACK_DELTA * 0x08)
-	psrlq mm4, (GP_STACK_DELTA * 0x08)
-	por   mm5, mm7
-.endif	
 SWAP_IF_NEEDED \reg
 .endm
 

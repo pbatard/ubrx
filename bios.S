@@ -38,7 +38,7 @@ JMP_WORKAROUND_OFFSET = 2*JMP_WORKAROUND	# used in macros.inc
 /********************************************************************************/
 /* MMX is required as we use the MMX registers as elementary stack + globals:   */
 /* MM0 = pointer to SuperIO base address to test                                */
-/* MM4+MM5 = up to 8 word registers stack, or 4 long registers                  */
+/* MM5 = up to 4 word registers stack, or 2 long registers                      */
 /* MM6 = up to 4 SP registers stack (return addresses)                          */
 /* MM7 = used during stack operations (but free to use otherwise)               */
 /* EBP = used for POPXD operations to preserve the content of extended register */
