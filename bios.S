@@ -523,7 +523,7 @@ serial_out:
 init_serial:
 	PUSH_SP
 	mov  si, offset serial_conf
-	mov  cx, (serial_conf_end - serial_conf)/2
+	mov  cx, (offset serial_conf_end - offset serial_conf)/2
 write_serial_conf:
 	mov  ax, [si]
 	ROM_CALL serial_out

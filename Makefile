@@ -1,7 +1,7 @@
 #
 # This file is part of the UBRX project.
 #
-# Copyright (c) 2011 Pete Batard <pbatard@akeo.ie>
+# Copyright (c) 2011 Pete Batard <pete@akeo.ie>
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License as
