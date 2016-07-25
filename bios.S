@@ -148,6 +148,16 @@ init:
 	mov  ax, cs
 	mov  ds, ax
 	mov  ss, ax
+	
+.if EARLY_AMD_DIAG
+	mov  dx, 0xcf8
+	mov  eax, 0x8000a348	# PCI 00:14:03 = SB600/700/800/900 LPC controller, reg 48h-4Bh (IO/Mem Port Decode Enable)
+	out  dx, eax
+	mov  dx, 0xcfe
+	in   al, dx
+	or   al, 0x20		# bit 5 of Reg 4Ah = Port enable for IO port 80h
+	out  dx, al
+.endif
 
 	DIAG 0x10
 
@@ -419,7 +429,7 @@ lpc_init:
 	jmp  sp
 lpc_amd:
 	PCI_CONF_OUT32 0, 0x14, 3, 0x44, AMD_SB_IO
-	PCI_CONF_OUT32 0, 0x14, 3, 0x48, 0x0000ff03	# 0x2E/0x4E forwarding, everything else disabled
+	PCI_CONF_OUT32 0, 0x14, 3, 0x48, 0x0020ff03	# 0x2E/0x4E and 0x80 (POST port) forwarding, everything else disabled
 
 .if SB800_48MHZ_INIT | SB900_48MHZ_INIT	# Force 48 MHz clock init (/!\ DOES NOT CHECK FOR VALID SB)
 	# We have the choice of switching to 32 bit, to use the MMIO default base of 0xFED80000
@@ -564,9 +574,9 @@ tx_wait:
 # Note: When executed in ROM, without cache, and from a slow ROM chip
 # (eg 150 ns read access time) the FIFO buffer is very likely to overflow
 # even with our aggressive use of XON/XOFF. This will lead to script lines
-# neing truncated during copy/paste and other nasty stuff. To remedy this 
+# being truncated during copy/paste and other nasty stuff. To remedy this 
 # you should first enable XIP (Execute in Place) through scripting. See
-# the scripts/ directory for examples on how to do that.
+# the scripts directory for examples on how to do that.
 .globl readchar
 readchar:
 	# Wait for TX FIFO and shift register to be empty. This ensures

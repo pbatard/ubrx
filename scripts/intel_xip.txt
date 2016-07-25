@@ -1,8 +1,10 @@
 # The following script enables XIP (eXecute In Place) for Intel CPUs
-# and turns on caching. This is the first script you should run
+# and turns caching on. This is the first script you should run
+# See chapter 11.11 as well as Table 35-2 in Intel 64 and IA-32
+# Architectures Software Developer's Manual
 
-A|$60000000 a		# disable cache
-$2ff c $0 d $c00 m	# fixed + var MTRRs
-$26f c $06060000 d $0 m	# FE000-FFFFF
+A|$60000000 a		# disable cache (CR0 | [not-write through|cache disable])
+$2ff c $0 d $c00 m	# MTRR_DEF_TYPE (0x2FF): set default type to uncacheable and enable fixed MTRRs + general MTRRs
+$26f c $06060000 d $0 m	# MTRR_FIX4K_F8000 (0x26F): set type writeback (0x06) for FE000-FEFFF and FF000-FFFFF
 A&$9fffffff a		# enable cache
 %			# start XIP

@@ -28,11 +28,14 @@ OBJECTS   = bios.o console.o
 TARGET    = bios
 MEMLAYOUT = xMemLayout.map
 
-ASM       = gcc
-CC        = gcc
-LD        = ld
-OBJDUMP   = objdump
-OBJCOPY   = objcopy
+# Comment this out if you're not using MinGW-w64
+CROSS_COMPILE=x86_64-w64-mingw32-
+
+ASM       = $(CROSS_COMPILE)gcc
+CC        = $(CROSS_COMPILE)gcc
+LD        = $(CROSS_COMPILE)ld
+OBJDUMP   = $(CROSS_COMPILE)objdump
+OBJCOPY   = $(CROSS_COMPILE)objcopy
 CFLAGS    = -m32
 LDFLAGS   = -nostartfile
 
@@ -58,7 +61,7 @@ endif
 all: $(TARGET).rom
 
 clean:
-	@-rm -f -v *.o *.ld *.layout *.out *.bin $(MEMLAYOUT)
+	@-rm -f -v *.o *.ld *.layout *.out *.bin _jmptest $(MEMLAYOUT)
 
 # Common flash sizes. Note that we can't use $@ in the target-specific variable
 # line as ROM_SIZE would be evaluated to the target at hand when reused.
@@ -83,6 +86,10 @@ clean:
 2m: $(TARGET).rom
 	@echo "001f$(BB_START_HEX):001fffff bootblock" > $@.layout
 
+4m: ROM_SIZE=4m
+4m: $(TARGET).rom
+	@echo "003f$(BB_START_HEX):003fffff bootblock" > $@.layout
+
 # Build a 512 KB BIOS for VMware, copy it and erase existing serial output
 vmware: 512k
 	@cp $(TARGET).rom /e/VMware/BIOS
@@ -97,9 +104,17 @@ flash: 128k
 erase:
 	@flashrom -p nicrealtek -E
 
-# Flash a 1MB BIOS on an ASUS P5B motherboard through SPI through, using an FT2232 USB adapter
+# Flash a 1MB BIOS on an ASUS P5B motherboard through SPI, using an FT2232 USB adapter
 p5b: 1m
 	flashrom -p ft2232_spi:type=arm-usb-tiny -l 1m.layout -i bootblock -n -w $(TARGET).rom
+
+# Flash a 2MB BIOS on a Colorful AMD APU motherboard through SPI, using a CH341A USB adapter
+col: 2m
+	flashrom -p ch341a_spi -l 2m.layout -i bootblock -n -w $(TARGET).rom
+
+# Flash a 4MB BIOS on an ASRock C70M1 motherboard through SPI, using a CH341A USB adapter
+c70: 4m
+	flashrom -p ch341a_spi -l 4m.layout -i bootblock -n -w $(TARGET).rom
 
 %.o: %.c Makefile
 	@echo "[CC]  $@"
