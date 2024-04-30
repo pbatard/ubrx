@@ -37,7 +37,7 @@ LD        = $(CROSS_COMPILE)ld
 OBJDUMP   = $(CROSS_COMPILE)objdump
 OBJCOPY   = $(CROSS_COMPILE)objcopy
 CFLAGS    = -m32
-LDFLAGS   = -nostartfile
+LDFLAGS   = -mi386pe
 
 # For the flashrom bootblock layout
 ifeq ($(BB_SIZE), 4K)
