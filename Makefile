@@ -28,16 +28,12 @@ OBJECTS   = bios.o console.o
 TARGET    = bios
 MEMLAYOUT = xMemLayout.map
 
-# Comment this out if you're not using MinGW-w64
-CROSS_COMPILE=x86_64-w64-mingw32-
-
 ASM       = $(CROSS_COMPILE)gcc
 CC        = $(CROSS_COMPILE)gcc
 LD        = $(CROSS_COMPILE)ld
 OBJDUMP   = $(CROSS_COMPILE)objdump
 OBJCOPY   = $(CROSS_COMPILE)objcopy
-CFLAGS    = -m32
-LDFLAGS   = -nostartfile
+CFLAGS    = -m32 -nostartfiles
 
 # For the flashrom bootblock layout
 ifeq ($(BB_SIZE), 4K)
